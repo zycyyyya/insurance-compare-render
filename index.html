@@ -212,14 +212,16 @@ async function calcAll(){
 // --- 泰赢家 ---
 function calcTYJ(age,sex,pmtP,prem,d){
   const SU=0.01,DR=0.70,adRL=0.0175,adRM=0.039;
-  const L=(tbl,k)=>d[tbl][sex+'-'+pmtP+'-'+age+'-'+k]||0;
-  const saR=L('sa_ratio',0), saB=Math.round(prem*saR/100*10)/10;
+  // v2: factors[key]=[cv,db,rv,vnp,rv_pvfb,cv_pvfb,bonus_db]
+  const L=k=>{const v=d.factors[sex+'-'+pmtP+'-'+age+'-'+k];return v||[0,0,0,0,0,0,0]};
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(prem*saR/100*10)/10;
   const maxYr=105-age; let rows=[],cumPre=0,cumBns=0;
   for(let t=1;t<=maxYr;t++){
     const p=t<=pmtP?prem:0; cumPre+=p;
-    const cvF=L('cv',t),dbF=L('db',t),rvF=L('rv',t);
-    const vnpF=t<=pmtP?L('vnp',t):0,rvP=L('rv_pvfb',t),cvP=L('cv_pvfb',t);
-    const bnsDb=L('bonus_db',t),prvRV=L('rv',Math.max(0,t-1)),prvRVP=L('rv_pvfb',Math.max(0,t-1));
+    const f=L(t);
+    const cvF=f[0],dbF=f[1],rvF=f[2];
+    const vnpF=t<=pmtP?f[3]:0,rvP=f[4],cvP=f[5];
+    const bnsDb=f[6],prvF=L(Math.max(0,t-1)),prvRV=prvF[2],prvRVP=prvF[4];
     const gCV=Math.round(cvF*saB/SU*10)/10;
     const gDB=Math.max(Math.round(dbF*saB/SU*10)/10,gCV);
     const vnpT=pmtP===1?0:vnpF;
@@ -237,7 +239,7 @@ function calcZY(age,sex,pmtP,prem,d,p){
   const SG=0.0175;
   let code=null,gp=null;
   if(d.code_map){const entry=d.code_map[pmtP+'-'+sex+'-'+age];if(entry){code=entry[0];gp=entry[1];}}
-  if(!code){for(const k of Object.keys(d.premium_cv)){if(k.endsWith('-1')){code=k.split('-')[0];gp=d.premium_cv[k][1];break}}}
+  if(!code){for(const k of Object.keys(d.factors)){if(k.endsWith('-1')){code=k.split('-')[0];gp=d.factors[k][1];break}}}
   if(!code)return null;
   const gpRounded=Math.round(gp*10)/10;
   const saPerShare=Math.ceil(1000/gpRounded*1000);
@@ -245,10 +247,11 @@ function calcZY(age,sex,pmtP,prem,d,p){
   const saB=Math.floor(saPerShare*shares);
   const maxYr=105-age; let rows=[],cumPre=0,cumBns=0;
   const prods=p.meta.products; const pn=prods&&prods[0]?prods[0].name:'';
+  // v2: factors[key]=[premium,cv,rpu]
   for(let t=1;t<=maxYr;t++){
     const pr=t<=pmtP?prem:0; cumPre+=pr;
-    const cvR=d.premium_cv[code+'-'+t]; const cvPU=cvR?cvR[0]:0;
-    const rpu=d.rpu[code+'-'+t]||0;
+    const f=d.factors[code+'-'+t]||[0,0,0];
+    const cvPU=f[1], rpu=f[2];
     const bnsR=d.bonus[pn+'|'+pmtP+'-'+sex+'-'+age+'-'+t]; const bnsSA=bnsR?bnsR[0]:0;
     const saCur=Math.round(saB*Math.pow(1+SG,t-1));
     const gCV=Math.round(saB*cvPU/10000);
@@ -284,12 +287,13 @@ function calcZHY(age,sex,NP,prem,d){
 function calcZHYG(age,sex,NP,prem,d){
   const SG=0.0175; const rPU=d.rate[NP+'-'+sex+'-'+age]||0; if(!rPU)return null;
   const share=prem/1000,saB=Math.round(rPU*share);
-  const L=(tbl,k)=>d[tbl][NP+'-'+sex+'-'+age+'-'+k]||0;
+  // v2: factors[key]=[cv_base,bonus_factor,jq_prem,jq_bonus,jq_cv]
+  const L=k=>{const v=d.factors[NP+'-'+sex+'-'+age+'-'+k];return v||[0,0,0,0,0]};
   const maxYr=105-age; let rows=[],cumPre=0,cumJQ=0;
   for(let t=1;t<=maxYr;t++){
     const pr=t<=NP?prem:0; cumPre+=pr;
-    const cvPU=L('cv_base',t); if(!cvPU&&t>1)break;
-    const bnsPU=L('bonus_factor',t),jqPPU=L('jq_prem',t),jqBPU=L('jq_bonus',t),jqCPU=L('jq_cv',t);
+    const f=L(t); const cvPU=f[0]; if(!cvPU&&t>1)break;
+    const bnsPU=f[1],jqPPU=f[2],jqBPU=f[3],jqCPU=f[4];
     const gCV=Math.round(cvPU*share),gDB=Math.max(Math.round(saB*Math.pow(1+SG,t-1)),gCV);
     const divB=bnsPU*saB/1000,divJ=jqBPU*cumJQ/1000; const totDiv=divB+divJ;
     const annJQ=jqPPU>0?Math.round(totDiv/jqPPU*1000):0; cumJQ+=annJQ;

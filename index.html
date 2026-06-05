@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width,initial-scale=1.0">
-<title>分红型终身寿险 · 利益演示对比</title>
+<title>分红型保险 · 利益演示对比</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <style>
@@ -15,11 +15,18 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f5f7fa;c
 .panel{background:#fff;border-radius:8px;box-shadow:0 1px 3px rgba(0,0,0,.08);margin-bottom:10px;overflow:hidden}
 .panel-header{padding:10px 14px;border-bottom:1px solid #eee;font-weight:600;font-size:13px}
 .panel-body{padding:14px}
+.cat-tabs{display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap}
+.cat-tab{padding:6px 14px;border-radius:20px;font-size:12px;font-weight:500;cursor:pointer;border:1px solid #ddd;background:#fff;transition:all .2s;user-select:none}
+.cat-tab.active{background:#2952a3;color:#fff;border-color:#2952a3}
+.cat-tab:hover{border-color:#2952a3}
 .prod-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:10px}
 .prod-card{border:1px solid #e0e0e0;border-radius:8px;padding:12px;background:#fafafa;transition:border .2s}
 .prod-card.selected{border-color:#2952a3;background:#f0f4ff}
-.prod-card label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:8px}
+.prod-card.hidden{display:none}
+.prod-card label{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:600;cursor:pointer;margin-bottom:4px}
 .prod-card input[type=checkbox]{width:16px;height:16px;accent-color:#2952a3}
+.prod-card .cat-badge{font-size:10px;padding:2px 6px;border-radius:10px;color:#fff;font-weight:500;margin-left:4px}
+.cat-badge.zeng额{background:#8e44ad}.cat-badge.快返{background:#e67e22}.cat-badge.养老{background:#27ae60}
 .prod-card .slider-row{display:flex;align-items:center;gap:8px;font-size:11px;color:#666;margin-top:6px}
 .prod-card .slider-row input[type=range]{flex:1}
 .prod-card .slider-row span{min-width:36px;text-align:right;font-weight:600}
@@ -35,6 +42,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f5f7fa;c
 .summary-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px;margin-bottom:10px}
 .card{background:#f8f9fb;padding:8px 10px;border-radius:6px;border:1px solid #eee}
 .card .label{font-size:10px;color:#888}.card .value{font-size:15px;font-weight:700;color:#1a2a6c;margin:2px 0}
+.card .sub{font-size:10px;color:#666}
 .chart-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .chart-box{position:relative;height:300px}
 .chart-box.full{grid-column:1/-1;height:340px}
@@ -51,7 +59,7 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
 </head>
 <body>
 <div class="header">
-  <div><h1>分红型终身寿险 · 利益演示对比</h1><span style="font-size:10px;opacity:.7">多产品 · 分红实现率可调 · 单利/复利双视角</span></div>
+  <div><h1>分红型保险 · 利益演示对比</h1><span style="font-size:10px;opacity:.7">增额终身寿 / 快返年金 / 养老年金 · 分红实现率可调</span></div>
   <div style="display:flex;gap:8px">
     <button class="btn btn-green" onclick="exportExcel()">📥 Excel</button>
     <button class="btn btn-outline" style="color:#e74c3c;border-color:#e74c3c" onclick="exportPDF()">📄 PDF</button>
@@ -63,6 +71,7 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
   <div class="panel">
     <div class="panel-header">📋 选择对比产品 <span style="font-weight:400;font-size:11px;color:#999">（可多选，拖动滑块调整分红实现率）</span></div>
     <div class="panel-body">
+      <div class="cat-tabs" id="catTabs"></div>
       <div class="prod-grid" id="prodGrid">加载中...</div>
     </div>
   </div>
@@ -74,8 +83,9 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
       <div class="form-row">
         <div class="form-group"><label>投保年龄</label><input type="number" id="age" value="41" min="0" max="70"></div>
         <div class="form-group"><label>性别</label><select id="sex"><option value="1">男</option><option value="2" selected>女</option></select></div>
-        <div class="form-group"><label>交费年期</label><select id="pmtP"><option value="1">趸交</option><option value="3">3年</option><option value="5" selected>5年</option><option value="10">10年</option></select></div>
+        <div class="form-group"><label>交费年期</label><select id="pmtP"><option value="1">趸交</option><option value="3">3年</option><option value="5" selected>5年</option><option value="6">6年</option><option value="10">10年</option></select></div>
         <div class="form-group"><label>年交保费 (¥)</label><input type="number" id="premium" value="100000" min="5000" step="1000"></div>
+        <div class="form-group" id="annageGroup" style="display:none"><label>领取年龄</label><select id="annage"><option value="55">55岁</option><option value="60" selected>60岁</option><option value="65">65岁</option></select></div>
         <div class="form-group" style="align-self:flex-end"><button class="btn btn-primary" onclick="calcAll()">计算对比</button></div>
       </div>
     </div>
@@ -85,21 +95,55 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
 </div>
 
 <script>
-let catalog=[], dataCache={}, charts=[], results=[];
+let catalog=[], dataCache={}, charts=[], results=[], activeCat='all';
 
 function fmt(n,d=0){if(n==null)return'-';return Number(n).toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d})}
+
+// ====== 分类 ======
+const CAT_MAP={'增额终身寿':'zeng额','分红快返年金':'快返','分红养老年金':'养老'};
 
 // ====== 加载产品目录 ======
 fetch('data/catalog.js?'+Date.now()).then(r=>r.text()).then(txt=>{
   eval(txt); catalog=window.__CATALOG;
+  renderCatTabs();
   renderProdGrid();
 });
+
+function renderCatTabs(){
+  const cats=['all','增额终身寿','分红快返年金','分红养老年金'];
+  let h='';
+  cats.forEach(c=>{
+    const label=c==='all'?'全部':c;
+    h+=`<div class="cat-tab${c===activeCat?' active':''}" onclick="filterCat('${c}')">${label}</div>`;
+  });
+  document.getElementById('catTabs').innerHTML=h;
+}
+
+function filterCat(cat){
+  activeCat=cat;
+  renderCatTabs();
+  catalog.forEach((p,i)=>{
+    const card=document.getElementById('card'+i);
+    const pcat=p.meta.category||'增额终身寿';
+    card.classList.toggle('hidden',cat!=='all'&&pcat!==cat);
+  });
+  // Show/hide annage selector
+  const hasPension=catalog.some(p=>{
+    const pcat=p.meta.category||'';
+    const cb=document.getElementById('card'+catalog.indexOf(p))?.querySelector('input[type=checkbox]');
+    return (cat==='all'||pcat===cat)&&pcat.includes('养老')&&cb?.checked;
+  });
+  document.getElementById('annageGroup').style.display=hasPension?'flex':'none';
+}
 
 function renderProdGrid(){
   let h='';
   catalog.forEach((p,i)=>{
+    const cat=p.meta.category||'增额终身寿';
+    const badge=CAT_MAP[cat]||'';
+    const badgeCls=CAT_MAP[cat]||'zeng额';
     h+=`<div class="prod-card selected" id="card${i}">
-      <label><input type="checkbox" checked onchange="toggleProd(${i},this.checked)">${p.label}</label>
+      <label><input type="checkbox" checked onchange="toggleProd(${i},this.checked)">${p.label}<span class="cat-badge ${badgeCls}">${badge}</span></label>
       <div class="slider-row">
         <span>分红实现率</span>
         <input type="range" id="rate${i}" min="0" max="200" value="100" oninput="document.getElementById('rateVal${i}').textContent=this.value+'%'">
@@ -128,31 +172,42 @@ async function loadData(p){
 
 // ====== 计算 ======
 async function calcAll(){
-  const a=+age.value, s=+sex.value, pt=+pmtP.value, pr=+premium.value;
+  const a=+age.value, s=+sex.value, pt=+pmtP.value, pr=+premium.value, ann=+annage.value;
   results=[]; charts.forEach(c=>c.destroy()); charts=[];
   document.getElementById('result').innerHTML='<div class="loading">计算中...</div>';
 
   for(let i=0;i<catalog.length;i++){
-    const cb=document.getElementById('card'+i).querySelector('input[type=checkbox]');
+    const card=document.getElementById('card'+i);
+    if(!card||card.classList.contains('hidden'))continue;
+    const cb=card.querySelector('input[type=checkbox]');
     if(!cb||!cb.checked) continue;
     const p=catalog[i], rate=parseInt(document.getElementById('rate'+i).value)/100;
     try{
       await loadData(p);
       const d=dataCache[p.name];
       let r;
-      if(p.meta.calc_type==='taiyingjia') r=calcTYJ(a,s,pt,pr,d);
-      else if(p.meta.calc_type==='zhongyi') r=calcZY(a,s,pt,pr,d,p);
-      else if(p.meta.calc_type==='zhongyou') r=calcZHY(a,s,pt,pr,d);
-      else if(p.meta.calc_type==='zhongying') r=calcZHYG(a,s,pt,pr,d);
+      const ct=p.meta.calc_type;
+      if(ct==='taiyingjia') r=calcTYJ(a,s,pt,pr,d);
+      else if(ct==='zhongyi') r=calcZY(a,s,pt,pr,d,p);
+      else if(ct==='zhongyou') r=calcZHY(a,s,pt,pr,d);
+      else if(ct==='zhongying') r=calcZHYG(a,s,pt,pr,d);
+      // === 新增年金产品 ===
+      else if(ct==='ljgt_annuity') r=calcLJGT(a,s,pt,pr,d,p);
+      else if(ct==='changcheng_annuity') r=calcCC(a,s,pt,pr,d);
+      else if(ct==='zhongyou_pension') r=calcZHYP(a,s,pt,pr,d);
+      else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann);
+      else if(ct==='zhongyi_annuity') r=calcZYA(a,s,pt,pr,d,p);
       else continue;
       if(!r||!r.rows) continue;
-      r.label=p.label; r.dividend_rate=rate;
+      r.label=p.label; r.dividend_rate=rate; r.category=p.meta.category||'增额终身寿';
       results.push(r);
     }catch(e){console.error(p.label,e)}
   }
   if(results.length===0){document.getElementById('result').innerHTML='<div class="error">无产品被选中或计算失败</div>';return}
   render();
 }
+
+// ====== 增额终身寿（原有） ======
 
 // --- 泰赢家 ---
 function calcTYJ(age,sex,pmtP,prem,d){
@@ -172,26 +227,18 @@ function calcTYJ(age,sex,pmtP,prem,d){
     const bInc=rvP>0?Math.round(yrDiv/rvP*SU*10)/10:0; cumBns+=bInc;
     const bCV=Math.round(cumBns*cvP/SU*10)/10;
     rows.push({year:t,age:age+t,premium:p,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:Math.max(Math.round(bnsDb*cumBns/SU*10)/10,bCV)});
+      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:Math.max(Math.round(bnsDb*cumBns/SU*10)/10,bCV),survival_benefit:0});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
 
-// --- 中意 ---
+// --- 中意（增额） ---
 function calcZY(age,sex,pmtP,prem,d,p){
   const SG=0.0175;
-  // 从 code_map 精确查找产品代码
   let code=null,gp=null;
-  if(d.code_map){
-    const entry=d.code_map[pmtP+'-'+sex+'-'+age];
-    if(entry){code=entry[0];gp=entry[1];}
-  }
-  // 回退：扫描 premium_cv
-  if(!code){
-    for(const k of Object.keys(d.premium_cv)){if(k.endsWith('-1')){code=k.split('-')[0];gp=d.premium_cv[k][1];break}}
-  }
+  if(d.code_map){const entry=d.code_map[pmtP+'-'+sex+'-'+age];if(entry){code=entry[0];gp=entry[1];}}
+  if(!code){for(const k of Object.keys(d.premium_cv)){if(k.endsWith('-1')){code=k.split('-')[0];gp=d.premium_cv[k][1];break}}}
   if(!code)return null;
-  // 保额按利益演示惯例: 1000/ROUND(GP,1) 上取整 × 保费份数
   const gpRounded=Math.round(gp*10)/10;
   const saPerShare=Math.ceil(1000/gpRounded*1000);
   const shares=Math.floor(prem/1000*10000)/10000;
@@ -210,12 +257,12 @@ function calcZY(age,sex,pmtP,prem,d,p){
     const aBSA=Math.round(saB*bnsSA/100000); cumBns+=aBSA;
     const bCV=Math.round(cumBns*rpu/10000);
     rows.push({year:t,age:curAge,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,sa_current:saCur,
-      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0)});
+      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0),survival_benefit:0});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
 
-// --- 中邮 ---
+// --- 中邮（增额） ---
 function calcZHY(age,sex,NP,prem,d){
   const SG=0.02,DR=0.01575,share=prem/1000;
   const L=k=>{const v=d.factors[sex+'-'+NP+'-'+age+'-'+k];return v||[0,0,0,0,0,0,0,0,0]};
@@ -228,16 +275,15 @@ function calcZHY(age,sex,NP,prem,d){
     const totDiv=diva+divb; cumJQ+=f[5]>0?totDiv/f[5]:0; prevJQER=cumJQ/1000*f[7];
     const bCV=Math.round(cumJQ/1000*f[6]),bDB=Math.round(cumJQ/1000*f[8]);
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:bDB});
+      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:bDB,survival_benefit:0});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:NP,entry_age:age};
 }
 
-// --- 中英 ---
+// --- 中英（增额） ---
 function calcZHYG(age,sex,NP,prem,d){
   const SG=0.0175; const rPU=d.rate[NP+'-'+sex+'-'+age]||0; if(!rPU)return null;
   const share=prem/1000,saB=Math.round(rPU*share);
-  // 包含交费期 NP 的查找
   const L=(tbl,k)=>d[tbl][NP+'-'+sex+'-'+age+'-'+k]||0;
   const maxYr=105-age; let rows=[],cumPre=0,cumJQ=0;
   for(let t=1;t<=maxYr;t++){
@@ -249,9 +295,163 @@ function calcZHYG(age,sex,NP,prem,d){
     const annJQ=jqPPU>0?Math.round(totDiv/jqPPU*1000):0; cumJQ+=annJQ;
     const bCV=Math.round(cumJQ/1000*jqCPU);
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0)});
+      guaranteed_cv:gCV,guaranteed_db:gDB,raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0),survival_benefit:0});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:NP,entry_age:age};
+}
+
+// ====== 年金产品（新增） ======
+
+// --- 陆家嘴国泰年金（泰给利/泰享年年） ---
+function calcLJGT(age,sex,pmtP,prem,d,p){
+  const SU=0.01,DR=p.meta.dividend_ratio||0.7,adRL=p.meta.ad_r_l||0.0175,adRM=p.meta.ad_r_m||0.039;
+  const sbStart=p.meta.sb_start||0, sbFactor=p.meta.sb_annual_factor||1;
+  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k]||[0,0,0,0,0];
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(prem*saR/100*10)/10;
+  if(!saB)return null;
+  const maxYr=105-age; let rows=[],cumPre=0,cumBns=0;
+  for(let t=1;t<=maxYr;t++){
+    const pr=t<=pmtP?prem:0; cumPre+=pr;
+    const f=L(t); const cvF=f[0],dbF=f[1],sbF=f[2],mbF=f[3],rvNP=f[4];
+    const cvBase=Math.max(rvNP,cvF);
+    const gCV=Math.round(cvBase*saB/SU*10)/10;
+    const gDB=Math.max(Math.round(dbF*saB/SU*10)/10,cumPre,gCV);
+    const sbRaw=sbF*saB/SU;
+    const sb=sbF>0?Math.round(sbRaw/sbFactor*10)/10:0;
+    const mb=mbF>0?Math.round(mbF*saB/SU*10)/10:0;
+    const yrDiv=cvBase>0?Math.round(cvBase*saB/SU*(adRM-adRL)*DR*10)/10:0;
+    cumBns+=yrDiv;
+    const bCV=Math.round(cumBns*10)/10;
+    rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb,maturity_benefit:mb,
+      annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0)});
+  }
+  return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
+}
+
+// --- 长城八达岭绝影版 ---
+function calcCC(age,sex,pmtP,prem,d){
+  const SU=0.01;
+  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k]||[0,0];
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(prem*saR/100*10)/10;
+  if(!saB)return null;
+  const maxYr=105-age; let rows=[],cumPre=0;
+  for(let t=1;t<=maxYr;t++){
+    const pr=t<=pmtP?prem:0; cumPre+=pr;
+    const f=L(t); const cvF=f[0],bCVF=f[1];
+    const gCV=Math.round(cvF*saB/SU*10)/10;
+    const gDB=Math.max(gCV,cumPre);
+    const bCV=Math.round(bCVF*saB/SU*10)/10;
+    rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:0,maturity_benefit:0,
+      raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0)});
+  }
+  return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
+}
+
+// --- 中邮乐享鑫年（养老年金） ---
+// factors: [cv, sb, mb, db, bonus_begin, bonus_end, jq_factor, jq_sa, jq_cv, jq_bb, jq_be, jq_sb, jq_mb, jq_db]
+function calcZHYP(age,sex,pmtP,prem,d){
+  const SU=0.01,DR=0.7;
+  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k];
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(prem*saR/100*10)/10;
+  if(!saB)return null;
+  const maxYr=105-age; let rows=[],cumPre=0,cumJQ=0;
+  for(let t=1;t<=maxYr;t++){
+    const pr=t<=pmtP?prem:0; cumPre+=pr;
+    const f=L(t); if(!f&&t>1)break; if(!f)continue;
+    const cvF=f[0],sbF=f[1],mbF=f[2],dbF=f[3],bbF=f[4],beF=f[5];
+    const jqF=f[6],jqSaF=f[7],jqCvF=f[8],jqBBF=f[9],jqBEF=f[10],jqSbF=f[11],jqMbF=f[12],jqDbF=f[13];
+    const gCV=Math.round(cvF*saB/SU*10)/10;
+    const gDB=Math.max(Math.round(dbF*saB/SU*10)/10,cumPre,gCV);
+    const sb=sbF>0?Math.round(sbF*saB/SU*10)/10:0;
+    const mb=mbF>0?Math.round(mbF*saB/SU*10)/10:0;
+    const bonusBase=(bbF+beF)/2;
+    const yrDiv=bonusBase>0?Math.round(bonusBase*saB/SU*0.035*DR*10)/10:0;
+    const annJQ=jqF>0?Math.round(yrDiv/jqF*1000)/1000:0; cumJQ+=annJQ;
+    const bCV=jqCvF>0?Math.round(cumJQ*jqCvF*saB/SU*10)/10:0;
+    const bDB=jqDbF>0?Math.max(Math.round(cumJQ*jqDbF*saB/SU*10)/10,bCV):bCV;
+    rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb,maturity_benefit:mb,
+      raw_bonus_cv:bCV,raw_bonus_db:bDB});
+  }
+  return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
+}
+
+// --- 青鸾版（养老年金，含领取年龄） ---
+// factors: [csv, rsv, rb_cv, rbrsv, rbnp] key含annage
+function calcQL(age,sex,pmtP,prem,d,annage){
+  const SU=0.01,ann=annage||60;
+  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+k];
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0;
+  const saB=Math.round(prem*saR/100*10)/10;
+  if(!saB)return null;
+  const maxYr=105-age; let rows=[],cumPre=0;
+  for(let t=1;t<=maxYr;t++){
+    const pr=t<=pmtP?prem:0; cumPre+=pr;
+    const f=L(t); if(!f&&t>1)break; if(!f)continue;
+    const csvF=f[0],rsvF=f[1],rbCvF=f[2],rbrsvF=f[3];
+    const gCV=Math.round(csvF*saB/SU*10)/10;
+    const gDB=Math.max(Math.round(rsvF*saB/SU*10)/10,cumPre,gCV);
+    const bCV=rbCvF>0?Math.round(rbCvF*saB/SU*10)/10:0;
+    const bDB=rbrsvF>0?Math.max(Math.round(rbrsvF*saB/SU*10)/10,bCV):bCV;
+    const sb=(age+t>=ann)?Math.round((rsvF-csvF)*saB/SU*10)/10:0;
+    rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb,maturity_benefit:0,
+      raw_bonus_cv:bCV-gCV>0?bCV-gCV:0,raw_bonus_db:Math.max(bDB-gDB,0)});
+  }
+  return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
+}
+
+// --- 中意意值有（快返年金） ---
+function calcZYA(age,sex,pmtP,prem,d,p){
+  let code=null,gp=null;
+  // 扫描 premium_cv 找到匹配的 code
+  if(d.premium_cv){
+    for(const k of Object.keys(d.premium_cv)){
+      if(k.endsWith('-0')){
+        const entry=d.premium_cv[k];
+        code=k.split('-').slice(0,-1).join('-');
+        gp=entry[1];
+        // 检查 bonus 表确认 sex/age/pmtP 匹配
+        const testKey='计划一|'+pmtP+'-'+sex+'-'+age+'-2';
+        if(d.bonus&&d.bonus[testKey])break;
+        code=null;gp=null;
+      }
+    }
+  }
+  if(!code){
+    // 回退：取第一个 code
+    for(const k of Object.keys(d.premium_cv)){
+      if(k.endsWith('-0')){code=k.replace(/-0$/,'');gp=d.premium_cv[k][1];break}
+    }
+  }
+  if(!code)return null;
+  const gpR=Math.round(gp*10)/10;
+  const saPerShare=Math.ceil(1000/gpR*1000);
+  const shares=Math.floor(prem/1000*10000)/10000;
+  const saB=Math.floor(saPerShare*shares);
+  const maxYr=105-age; let rows=[],cumPre=0,cumBns=0;
+  for(let t=1;t<=maxYr;t++){
+    const pr=t<=pmtP?prem:0; cumPre+=pr;
+    const cvR=d.premium_cv[code+'-'+t]; const cvPU=cvR?cvR[0]:0;
+    const rpu=d.rpu[code+'-'+t]||0;
+    // bonus: 查多个 plan
+    let bnsSA=0;
+    for(const plan of ['计划一','计划二','计划三','Plan1','Plan2']){
+      const key=plan+'|'+pmtP+'-'+sex+'-'+age+'-'+t;
+      if(d.bonus&&d.bonus[key]){bnsSA=d.bonus[key];break}
+    }
+    const gCV=Math.round(saB*cvPU/10000);
+    const curAge=age+t;
+    let gDB=Math.max(Math.round(cumPre),gCV);
+    const aBSA=Math.round(saB*bnsSA/100000); cumBns+=aBSA;
+    const bCV=Math.round(cumBns*rpu/10000);
+    rows.push({year:t,age:curAge,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:0,maturity_benefit:0,
+      raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0)});
+  }
+  return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
 
 // ====== 单利 ======
@@ -260,17 +460,11 @@ function calcSimpleRate(rows,premium,pmtP){
   for(const row of rows){
     const val=row.total_cv; const yrs=row.year;
     if(val<=0||yrs<1){d.push({year:row.year,simple:null});continue}
-    // 加权投入：每期保费 × (总年数 - 该期年份 + 1)
     let weightedInvest=0, totalInvest=0;
     for(let y=1;y<=yrs;y++){
-      if(y<=pmtP){
-        const holdYrs=yrs-y+1; // 该期保费到退保的持有年数
-        weightedInvest+=premium*holdYrs;
-        totalInvest+=premium;
-      }
+      if(y<=pmtP){weightedInvest+=premium*(yrs-y+1);totalInvest+=premium}
     }
     const gain=val-totalInvest;
-    // 单利 = 总收益 / 加权投入
     const simple=weightedInvest>0?gain/weightedInvest*100:null;
     d.push({year:row.year,simple:simple});
   }
@@ -280,39 +474,8 @@ function calcSimpleRate(rows,premium,pmtP){
 // ====== 渲染 ======
 function render(){
   let html='';
-
   // 对比图表
   html+='<div class="chart-row"><div class="chart-box full"><canvas id="cCmpCV"></canvas></div></div>';
-
-  // 对比表格
-  const maxYr=Math.min(...results.map(r=>r.rows.length));
-  const showSet=new Set(); for(let y=1;y<=maxYr;y++){if(y<=10||y%5===0||y===maxYr)showSet.add(y)}
-
-  // Summary cards per product
-  html+='<div class="panel"><div class="panel-header">📊 关键指标对比</div><div class="panel-body"><div class="summary-cards">';
-  for(const r of results){
-    let be='—',db2='—'; const tp=r.annual_premium*r.pmt_p;
-    for(const row of r.rows){if(be==='—'&&row.total_cv>=row.cum_premium)be=row.year;if(db2==='—'&&row.total_cv>=row.cum_premium*2)db2=row.year}
-    const row10=r.rows[9]; const row20=r.rows[19];
-    const irr10=calcIRR(r.rows.slice(0,10),r.annual_premium,r.pmt_p); const irr10v=irr10[irr10.length-1];
-    const irr20=calcIRR(r.rows.slice(0,20),r.annual_premium,r.pmt_p); const irr20v=irr20[irr20.length-1];
-    html+=`<div class="card"><div class="label">${r.label}<br>分红${Math.round(r.dividend_rate*100)}%</div>
-      <div class="value">${fmt(r.sa_basic,1)}</div><div class="sub">保额 | 回本${be}年 | 翻倍${db2}年</div>
-      <div class="sub">10年CV ${fmt(row10?row10.total_cv:0)} | 20年CV ${fmt(row20?row20.total_cv:0)}</div>
-      <div class="sub">10年IRR ${irr10v&&irr10v.irr?irr10v.irr.toFixed(2)+'%':'-'} | 20年IRR ${irr20v&&irr20v.irr?irr20v.irr.toFixed(2)+'%':'-'}</div></div>`;
-  }
-  html+='</div></div></div>';
-
-  // 详细对比表
-  html+='<div class="panel"><div class="panel-header">📋 利益演示对比</div><div class="scroll-table"><table><thead><tr><th>年度</th><th>年龄</th>';
-  for(const r of results){
-    html+=`<th colspan="5">${r.label} (分红${Math.round(r.dividend_rate*100)}%)</th>`;
-  }
-  html+='</tr><tr style="font-size:10px"><th></th><th></th>';
-  for(let i=0;i<results.length;i++){
-    html+='<th>累计<br>保费</th><th>保证<br>CV</th><th>总CV<br>(含红利)</th><th>单利</th><th>IRR</th>';
-  }
-  html+='</tr></thead><tbody>';
 
   // Apply dividend rate and compute total_cv
   for(const r of results){
@@ -324,6 +487,47 @@ function render(){
     }
   }
 
+  const hasSB=results.some(r=>r.rows.some(row=>(row.survival_benefit||0)>0));
+  const maxYr=Math.min(...results.map(r=>r.rows.length));
+  const showSet=new Set(); for(let y=1;y<=maxYr;y++){if(y<=10||y%5===0||y===maxYr)showSet.add(y)}
+
+  // Summary cards
+  html+='<div class="panel"><div class="panel-header">📊 关键指标对比</div><div class="panel-body"><div class="summary-cards">';
+  for(const r of results){
+    let be='—',db2='—';
+    for(const row of r.rows){
+      if(be==='—'&&row.total_cv>=row.cum_premium)be=row.year;
+      if(db2==='—'&&row.total_cv>=row.cum_premium*2)db2=row.year;
+    }
+    const row10=r.rows[9]; const row20=r.rows[19];
+    const irr10=calcIRR(r.rows.slice(0,10),r.annual_premium,r.pmt_p); const irr10v=irr10[irr10.length-1];
+    const irr20=calcIRR(r.rows.slice(0,20),r.annual_premium,r.pmt_p); const irr20v=irr20[irr20.length-1];
+    // 年金产品额外计算：总领取
+    let cumSB=0; for(const row of r.rows)cumSB+=(row.survival_benefit||0);
+    html+=`<div class="card"><div class="label">${r.label}<br>分红${Math.round(r.dividend_rate*100)}%</div>
+      <div class="value">${fmt(r.sa_basic,1)}</div>
+      <div class="sub">保额 | 回本${be}年 | 翻倍${db2}年</div>
+      <div class="sub">10年CV ${fmt(row10?row10.total_cv:0)} | 20年CV ${fmt(row20?row20.total_cv:0)}</div>
+      <div class="sub">10年IRR ${irr10v&&irr10v.irr?irr10v.irr.toFixed(2)+'%':'-'} | 20年IRR ${irr20v&&irr20v.irr?irr20v.irr.toFixed(2)+'%':'-'}</div>
+      ${cumSB>0?`<div class="sub" style="color:#27ae60">累计领取 ¥${fmt(cumSB)}</div>`:''}
+    </div>`;
+  }
+  html+='</div></div></div>';
+
+  // 详细对比表
+  const colsPerProduct=hasSB?7:5;
+  html+='<div class="panel"><div class="panel-header">📋 利益演示对比</div><div class="scroll-table"><table><thead><tr><th>年度</th><th>年龄</th>';
+  for(const r of results){
+    html+=`<th colspan="${colsPerProduct}">${r.label} (分红${Math.round(r.dividend_rate*100)}%)</th>`;
+  }
+  html+='</tr><tr style="font-size:10px"><th></th><th></th>';
+  for(let i=0;i<results.length;i++){
+    html+='<th>累计<br>保费</th><th>保证<br>CV</th><th>总CV<br>(含红利)</th>';
+    if(hasSB)html+='<th>生存金/<br>年金</th>';
+    html+='<th>单利</th><th>IRR</th>';
+  }
+  html+='</tr></thead><tbody>';
+
   const simpleRates=results.map(r=>calcSimpleRate(r.rows,r.annual_premium,r.pmt_p));
   const irrAll=results.map(r=>calcIRR(r.rows,r.annual_premium,r.pmt_p));
 
@@ -334,8 +538,9 @@ function render(){
       const irrTxt=(ir&&ir.irr!=null&&ir.irr>=0)?ir.irr.toFixed(2)+'%':'-';
       html+=`<td class="num">${fmt(row.cum_premium)}</td>
         <td class="num" style="color:#2952a3">${fmt(row.guaranteed_cv)}</td>
-        <td class="num" style="font-weight:700;color:#1a2a6c">${fmt(row.total_cv)}</td>
-        <td class="num" style="color:#e67e22">${sr&&sr.simple!=null?sr.simple.toFixed(2)+'%':'-'}</td>
+        <td class="num" style="font-weight:700;color:#1a2a6c">${fmt(row.total_cv)}</td>`;
+      if(hasSB)html+=`<td class="num" style="color:#27ae60">${fmt(row.survival_benefit||0)}</td>`;
+      html+=`<td class="num" style="color:#e67e22">${sr&&sr.simple!=null?sr.simple.toFixed(2)+'%':'-'}</td>
         <td class="num" style="color:${ir&&ir.irr&&ir.irr>3?'#27ae60':'#666'}">${irrTxt}</td>`;
     }
     html+='</tr>';
@@ -343,18 +548,14 @@ function render(){
   html+='</tbody></table></div></div>';
 
   document.getElementById('result').innerHTML=html;
-
-  // 图表
   setTimeout(()=>drawChart(),100);
 }
 
 function drawChart(){
   const maxYr=Math.min(...results.map(r=>r.rows.length));
   const filter=[]; for(let y=1;y<=maxYr;y++){if(y<=30||y%5===0)filter.push(y)}
-  const labels=filter;
-  const colors=['#2952a3','#e74c3c','#27ae60','#e67e22','#8e44ad','#16a085'];
+  const colors=['#2952a3','#e74c3c','#27ae60','#e67e22','#8e44ad','#16a085','#c0392b','#2c3e50','#d35400','#16a085','#8e44ad'];
   const datasets=results.map((r,i)=>{
-    const d=filter.map(y=>{const row=r.rows[y-1];return row?row.total_cv:null}).filter(v=>v!=null);
     const lbl=filter.map(y=>{const row=r.rows[y-1];return row?row.total_cv:null});
     return {
       label:`${r.label} (分红${Math.round(r.dividend_rate*100)}%)`,
@@ -362,8 +563,7 @@ function drawChart(){
       backgroundColor:colors[i%colors.length]+'20',fill:false,tension:.3
     };
   });
-
-  charts.push(new Chart(document.getElementById('cCmpCV'),{type:'line',data:{labels,datasets},
+  charts.push(new Chart(document.getElementById('cCmpCV'),{type:'line',data:{labels:filter,datasets},
     options:{responsive:true,maintainAspectRatio:false,
     plugins:{title:{display:true,text:'总现金价值对比（含红利×分红实现率）',font:{size:13}}},
     scales:{y:{ticks:{callback:v=>fmt(v/10000)+'万'}}}}}));
@@ -374,7 +574,7 @@ function calcIRR(rows,premium,pmtP){
   const d=[];
   for(let i=0;i<rows.length;i++){
     const yrs=i+1; if(yrs<2){d.push({year:rows[i].year,irr:null});continue}
-    const cfs=[];for(let y=0;y<yrs;y++)cfs.push(y<pmtP?-premium:0);cfs[cfs.length-1]+=rows[i].total_cv||rows[i].guaranteed_cv;
+    const cfs=[];for(let y=0;y<yrs;y++)cfs.push(y<pmtP?-premium:0);cfs[cfs.length-1]+=(rows[i].total_cv||rows[i].guaranteed_cv);
     let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);
     if(flo*fhi>0){d.push({year:rows[i].year,irr:null});continue}
     for(let it=0;it<60;it++){const mid=(lo+hi)/2,fm=npvAt(mid,cfs);if(Math.abs(fm)<1e-6){lo=hi=mid;break}if(flo*fm<0)hi=mid;else lo=mid;if(hi-lo<1e-10)break}
@@ -388,17 +588,25 @@ function calcIRR(rows,premium,pmtP){
 // ====== 导出 ======
 function exportExcel(){
   if(results.length===0)return alert('请先计算');
+  const hasSB=results.some(r=>r.rows.some(row=>(row.survival_benefit||0)>0));
   const maxYr=Math.min(...results.map(r=>r.rows.length));
   const showSet=new Set(); for(let y=1;y<=maxYr;y++){if(y<=10||y%5===0||y===maxYr)showSet.add(y)}
   const rows=[['年度','年龄']];
-  for(const r of results){rows[0].push(...[r.label+' 累计保费',r.label+' 保证CV',r.label+' 总CV(含红利)',r.label+' 单利',r.label+' IRR'])}
+  for(const r of results){
+    const cols=[r.label+' 累计保费',r.label+' 保证CV',r.label+' 总CV(含红利)'];
+    if(hasSB)cols.push(r.label+' 生存金/年金');
+    cols.push(r.label+' 单利',r.label+' IRR');
+    rows[0].push(...cols);
+  }
   const irrExports=results.map(r=>calcIRR(r.rows,r.annual_premium,r.pmt_p));
   for(const yr of showSet){
     const r=[yr,results[0].entry_age+yr];
     for(let i=0;i<results.length;i++){
       const row=results[i].rows[yr-1]; const sr=calcSimpleRate(results[i].rows,results[i].annual_premium,results[i].pmt_p);
       const ir=irrExports[i][yr-1]; const irrTxt=(ir&&ir.irr!=null&&ir.irr>=0)?ir.irr.toFixed(2)+'%':'-';
-      r.push(row.cum_premium,row.guaranteed_cv,row.total_cv,sr[yr-1]?sr[yr-1].simple?.toFixed(2)+'%':'-',irrTxt);
+      r.push(row.cum_premium,row.guaranteed_cv,row.total_cv);
+      if(hasSB)r.push(row.survival_benefit||0);
+      r.push(sr[yr-1]?sr[yr-1].simple?.toFixed(2)+'%':'-',irrTxt);
     }
     rows.push(r);
   }
@@ -407,9 +615,7 @@ function exportExcel(){
   XLSX.writeFile(wb,'保险利益演示对比.xlsx');
 }
 
-function exportPDF(){
-  window.print();
-}
+function exportPDF(){window.print();}
 </script>
 </body>
 </html>

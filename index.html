@@ -426,25 +426,29 @@ function calcZHYP(age,sex,pmtP,prem,d){
 function calcQL(age,sex,pmtP,prem,d,annage){
   const share=prem/1000, ann=annage||60;
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+k];
-  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0;
-  const saB=Math.round(saR*share);
+  // 青鸾版saR = SA/GP*100 (同LJGT格式), saB = saR * prem/100
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(saR*prem/100*10)/10;
   if(!saB)return null;
-  const maxYr=105-age; let rows=[],cumPre=0;
+  const maxYr=Math.min(80, 105-age); let rows=[],cumPre=0, cumJQ=0;
   for(let t=1;t<=maxYr;t++){
     const pr=t<=pmtP?prem:0; cumPre+=pr;
     const f=L(t); if(!f&&t>1)break; if(!f)continue;
     const csvF=f[0],rsvF=f[1],rbCvF=f[2],rbrsvF=f[3],rbnpF=f[4];
     const gCV=Math.round(csvF*share);
     const gDB=Math.max(Math.round(rsvF*share),cumPre,gCV);
-    // 年金 = 当年rsv差值 (rsv下降 → 领取年金)
-    const prevKey=sex+'-'+pmtP+'-'+age+'-'+ann+'-'+(t-1);
-    const prevF=t>1?d.factors[prevKey]:null;
-    const prevRsv=prevF?prevF[1]:rsvF;
-    const annualPayout=age+t>=ann?Math.round(Math.max(0,prevRsv-rsvF)*share):0;
-    const bCV=Math.round(rbCvF*share);
-    const bDB=Math.round(rbrsvF*share);
+    // 年金 = 基本保额 (达到领取年龄后每年固定领取)
+    const annualPayout=age+t>=ann?saB:0;
+    // 红利现价简化: rbCvF是每千SA的红利基数, bCV=cumJQ*rbCvF
+    // JQSA累积 = 年金分红转换为JQ保额
+    if(annualPayout>0 && rbCvF>0){
+      cumJQ+=annualPayout*0.035*0.7/(saB/10000); // 简化的JQ累积
+    }
+    const bCV=Math.round(cumJQ*rbCvF*saB/1000*10)/10;
+    const bDB=Math.round(cumJQ*rbrsvF*saB/1000*10)/10;
+    // 红利年金 = JQ累积对应的年金
+    const bSB=Math.round(cumJQ*rbnpF*saB/1000*10)/10;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout,maturity_benefit:0,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout+bSB,maturity_benefit:0,
       raw_bonus_cv:bCV,raw_bonus_db:Math.max(bDB,0)});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
@@ -649,7 +653,7 @@ function render(){
 
 function drawChart(){
   const maxYr=Math.min(...results.map(r=>r.rows.length));
-  const filter=[]; for(let y=1;y<=maxYr;y++){if(y<=30||y%5===0)filter.push(y)}
+  const filter=[]; for(let y=1;y<=maxYr;y++){if(y<=30||y%5===0)filter.push(y); if(y>60)break}
   const colors=['#2952a3','#e74c3c','#27ae60','#e67e22','#8e44ad','#16a085','#c0392b','#2c3e50','#d35400','#16a085','#8e44ad'];
   const datasets=results.map((r,i)=>{
     const lbl=filter.map(y=>{const row=r.rows[y-1];return row?row.total_cv:null});

@@ -86,6 +86,7 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
         <div class="form-group"><label>交费年期</label><select id="pmtP"><option value="1">趸交</option><option value="3">3年</option><option value="5" selected>5年</option><option value="6">6年</option><option value="10">10年</option></select></div>
         <div class="form-group"><label>年交保费 (¥)</label><input type="number" id="premium" value="100000" min="5000" step="1000"></div>
         <div class="form-group" id="annageGroup" style="display:none"><label>领取年龄</label><select id="annage"><option value="55">55岁</option><option value="60" selected>60岁</option><option value="65">65岁</option><option value="70">70岁</option></select></div>
+        <div class="form-group" id="planGroup" style="display:none"><label>方案选择</label><select id="planSelect"><option value="1" selected>计划一</option><option value="2">计划二</option><option value="3">计划三</option><option value="4">计划四</option></select></div>
         <div class="form-group" style="align-self:flex-end"><button class="btn btn-primary" onclick="calcAll()">计算对比</button></div>
       </div>
     </div>
@@ -134,6 +135,12 @@ function filterCat(cat){
     return (cat==='all'||pcat===cat)&&pcat.includes('养老')&&cb?.checked;
   });
   document.getElementById('annageGroup').style.display=hasPension?'flex':'none';
+  // 方案选择仅青鸾显示
+  const hasQingluan=catalog.some(p=>{
+    const cb=document.getElementById('card'+catalog.indexOf(p))?.querySelector('input[type=checkbox]');
+    return p.meta.calc_type==='qingluan_pension' && cb?.checked && (cat==='all'||(p.meta.category||'').includes('养老'));
+  });
+  document.getElementById('planGroup').style.display=hasQingluan?'flex':'none';
 }
 
 function renderProdGrid(){
@@ -172,7 +179,7 @@ async function loadData(p){
 
 // ====== 计算 ======
 async function calcAll(){
-  const a=+age.value, s=+sex.value, pt=+pmtP.value, pr=+premium.value, ann=+annage.value;
+  const a=+age.value, s=+sex.value, pt=+pmtP.value, pr=+premium.value, ann=+annage.value, plan=+planSelect.value;
   results=[]; charts.forEach(c=>c.destroy()); charts=[];
   document.getElementById('result').innerHTML='<div class="loading">计算中...</div>';
 
@@ -201,7 +208,7 @@ async function calcAll(){
       else if(ct==='ljgt_annuity') r=calcLJGT(a,s,pt,pr,d,t.p);
       else if(ct==='changcheng_annuity') r=calcCC(a,s,pt,pr,d);
       else if(ct==='zhongyou_pension') r=calcZHYP(a,s,pt,pr,d,ann);
-      else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann);
+      else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann,plan);
       else if(ct==='zhongyi_annuity') r=calcZYA(a,s,pt,pr,d,t.p);
       else continue;
       if(!r||!r.rows) continue;
@@ -421,13 +428,13 @@ function calcZHYP(age,sex,pmtP,prem,d,annage){
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
 
-// --- 青鸾版（养老年金，per-1000-premium数据，含领取年龄） ---
-// factors: [csv, rsv, rb_cv, rbrsv, rbnp] key含annage
-function calcQL(age,sex,pmtP,prem,d,annage){
-  const share=prem/1000, ann=annage||60;
-  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+k];
-  // 青鸾版saR含annage维度: key = sex-pmtP-age-annage
-  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age+'-'+ann]||0, saB=Math.round(saR*prem/100*10)/10;
+// --- 青鸾版（养老年金，per-1000-premium数据，含领取年龄+方案选择） ---
+// factors: [csv, rsv, rb_cv, rbrsv, rbnp] key含annage-plan-yr
+function calcQL(age,sex,pmtP,prem,d,annage,plan){
+  const share=prem/1000, ann=annage||60, pl=plan||1;
+  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+pl+'-'+k];
+  // 青鸾版saR含annage+plan维度: key = sex-pmtP-age-annage-plan
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+pl]||0, saB=Math.round(saR*prem/100*10)/10;
   if(!saB)return null;
   const maxYr=Math.min(80, 105-age); let rows=[],cumPre=0;
   for(let t=1;t<=maxYr;t++){

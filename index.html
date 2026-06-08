@@ -206,7 +206,7 @@ async function calcAll(){
       else if(ct==='zhongying') r=calcZHYG(a,s,pt,pr,d);
       // === 新增年金产品 ===
       else if(ct==='ljgt_annuity') r=calcLJGT(a,s,pt,pr,d,t.p);
-      else if(ct==='changcheng_annuity') r=calcCC(a,s,pt,pr,d);
+      else if(ct==='changcheng_annuity') r=calcCC(a,s,pt,pr,d,t.p);
       else if(ct==='zhongyou_pension') r=calcZHYP(a,s,pt,pr,d,ann);
       else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann,plan);
       else if(ct==='zhongyi_annuity') r=calcZYA(a,s,pt,pr,d,t.p);
@@ -373,22 +373,29 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
 
-// --- 长城八达岭绝影版（per-1000-premium 数据） ---
-function calcCC(age,sex,pmtP,prem,d){
-  const share=prem/1000;
+// --- 长城八达岭绝影版（per-1000-premium 数据，快返年金有生存给付+分红） ---
+function calcCC(age,sex,pmtP,prem,d,p){
+  const share=prem/1000, bpStart=p.meta.bp_start||5;
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k]||[0,0];
+  // saR 存储原始SA值(per 1000 prem), saB = 年金年领金额
   const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(saR*share);
   if(!saB)return null;
-  const maxYr=105-age; let rows=[],cumPre=0;
+  const maxYr=105-age; let rows=[],cumPre=0, cumBns=0;
   for(let t=1;t<=maxYr;t++){
     const pr=t<=pmtP?prem:0; cumPre+=pr;
     const f=L(t); const cvF=f[0],bCVF=f[1];
     const gCV=Math.round(cvF*share);
     const gDB=Math.max(gCV,cumPre);
-    const bCV=Math.round(bCVF*share);
+    // 红利: 每年红利金额(年度)，累积后按JQ估值
+    const annualDiv=bCVF>0?Math.round(bCVF*share):0;
+    cumBns+=annualDiv;
+    const bCV=Math.round(cumBns); // 累积红利(简化)
+    // 快返年金: 达到BPstart年开始每年领取年金=saB + 年金分红
+    const annualPayout=t>=bpStart?saB:0;
+    const bonusPayout=t>=bpStart?annualDiv:0;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:0,maturity_benefit:0,
-      raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0)});
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout+bonusPayout,maturity_benefit:0,
+      raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0),annual_dividend:annualDiv});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
@@ -466,17 +473,20 @@ function calcQL(age,sex,pmtP,prem,d,annage,plan){
 // --- 中意意值有（快返年金） ---
 function calcZYA(age,sex,pmtP,prem,d,p){
   // premium_cv codes: BK系列, rpu codes: AZ系列 — 按排序索引一一对应
-  const bkCodes=Object.keys(d.premium_cv||{}).map(k=>k.split('-')[0]).filter((v,i,a)=>a.indexOf(v)===i).sort();
-  const azCodes=Object.keys(d.rpu||{}).map(k=>k.split('-')[0]).filter((v,i,a)=>a.indexOf(v)===i).sort();
+  // 后缀CM=男(sex1), CF=女(sex2): 筛选匹配性别的code
+  const sexSuffix=sex===1?'CM':'CF';
+  const bkAll=Object.keys(d.premium_cv||{}).map(k=>k.split('-')[0]).filter((v,i,a)=>a.indexOf(v)===i).sort();
+  const azAll=Object.keys(d.rpu||{}).map(k=>k.split('-')[0]).filter((v,i,a)=>a.indexOf(v)===i).sort();
+  const bkCodes=bkAll.filter(c=>c.endsWith(sexSuffix));
+  const azCodes=azAll.filter(c=>c.endsWith(sexSuffix));
   let codeIdx=-1, gp=null;
 
-  // 用bonus表确认匹配的premium_cv code（按plan|pay_term-sex-age-pass_yr格式查找）
+  // 用bonus表确认匹配(取第一个可用的code)
   for(let ci=0;ci<bkCodes.length;ci++){
     const testKey='计划一|'+pmtP+'-'+sex+'-'+age+'-2';
     const cvEntry=d.premium_cv[bkCodes[ci]+'-0'];
     if(cvEntry && d.bonus && d.bonus[testKey]){codeIdx=ci; gp=cvEntry[1]; break}
   }
-  // 回退：取第一个，或用bonus尝试匹配
   if(codeIdx<0){
     for(let ci=0;ci<bkCodes.length;ci++){
       const cvEntry=d.premium_cv[bkCodes[ci]+'-0'];

@@ -7,7 +7,7 @@ window.__CATALOG=[
 {"name":"taigeli","label":"泰给利2.0（快返年金）","meta":{"sa_unit":0.01,"dividend_ratio":0.7,"ad_r_l":0.0175,"ad_r_m":0.039,"products":[{"name":"泰给利2.0","pay_terms":[1,3,5,10],"ages":[0,65]}],"calc_type":"ljgt_annuity","category":"分红快返年金","sb_start":5,"sb_annual_factor":1.008}},
 {"name":"taixiang","label":"泰享年年（养老年金）","meta":{"sa_unit":0.01,"dividend_ratio":0.7,"ad_r_l":0.0175,"ad_r_m":0.039,"products":[{"name":"泰享年年","pay_terms":[1,3,5,10],"ages":[0,65]}],"calc_type":"ljgt_annuity","category":"分红养老年金","sb_start":0,"sb_annual_factor":1}},
 {"name":"changcheng","label":"长城八达岭绝影版（快返年金）","meta":{"sa_unit":0.01,"dividend_ratio":0.7,"products":[{"name":"长城八达岭绝影版","pay_terms":[1,3,5,10],"ages":[0,65]}],"calc_type":"changcheng_annuity","category":"分红快返年金"}},
-{"name":"zhongyou_pension","label":"中邮乐享鑫年（养老年金）","meta":{"sa_unit":0.01,"dividend_ratio":0.7,"products":[{"name":"中邮乐享鑫年","pay_terms":[1,3,5,10],"ages":[0,60]}],"calc_type":"zhongyou_pension","category":"分红养老年金"}},
+{"name":"zhongyou_pension","label":"中邮乐享鑫年（养老年金）","meta":{"sa_unit":0.01,"dividend_ratio":0.7,"products":[{"name":"中邮乐享鑫年","pay_terms":[1,3,5,10],"ages":[0,60],"annages":[55,60,65,70]}],"calc_type":"zhongyou_pension","category":"分红养老年金"}},
 {"name":"qingluan","label":"星海赢家青鸾版（养老年金）","meta":{"sa_unit":0.01,"dividend_ratio":0.7,"products":[{"name":"星海赢家青鸾版","pay_terms":[1,3,5,10],"ages":[0,60],"annages":[55,60,65]}],"calc_type":"qingluan_pension","category":"分红养老年金"}},
 {"name":"zhongyi_annuity","label":"中意意值有（快返年金）","meta":{"sa_growth":0,"dividend_ratio":1.0,"products":[{"name":"中意意值有","pay_terms":[1,3,5,6,10],"ages":[0,65]}],"calc_type":"zhongyi_annuity","category":"分红快返年金"}}
 ];

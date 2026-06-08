@@ -554,7 +554,7 @@ function calcSimpleRate(rows,premium,pmtP){
   let cumSB=0; // 累计已领取年金+红利
   for(const row of rows){
     const yrs=row.year;
-    const sb=(row.survival_benefit||0)+(row.bonus_cv_adj||0); // 当年领取=年金+红利
+    const sb=(row.survival_benefit||0); // 当年领取=年金(含红利分红)
     cumSB+=sb;
     const val=row.total_cv+cumSB; // 总回报=当前CV+累计已领取
     if(val<=0||yrs<1){d.push({year:row.year,simple:null});continue}
@@ -594,7 +594,7 @@ function render(){
   for(const r of results){
     let be='—',db2='—',cumSB2=0;
     for(const row of r.rows){
-      cumSB2+=(row.survival_benefit||0)+(row.bonus_cv_adj||0);
+      cumSB2+=(row.survival_benefit||0);
       if(be==='—'&&row.total_cv+cumSB2>=row.cum_premium)be=row.year;
       if(db2==='—'&&row.total_cv+cumSB2>=row.cum_premium*2)db2=row.year;
     }
@@ -606,7 +606,7 @@ function render(){
       for(let y=0;y<rows.length;y++){
         const row=rows[y]; let cf=0;
         if(y<pp) cf-=prem;
-        cf+=(row.survival_benefit||0)+(row.bonus_cv_adj||0);
+        cf+=(row.survival_benefit||0);
         if(y===rows.length-1) cf+=(row.total_cv||row.guaranteed_cv);
         cfs.push(cf);
       }
@@ -657,7 +657,6 @@ function render(){
         let cf=0;
         if(y<r.pmt_p) cf-=r.annual_premium;
         cf+=(row.survival_benefit||0);
-        cf+=(row.bonus_cv_adj||0);
         if(y===rows.length-1) cf+=(row.total_cv||row.guaranteed_cv);
         cfs.push(cf);
       }
@@ -723,8 +722,7 @@ function calcIRR(rows,premium,pmtP){
       const row=rows[y];
       let cf=0;
       if(y<pmtP) cf-=premium; // 交保费
-      cf+=(row.survival_benefit||0); // 领年金
-      cf+=(row.bonus_cv_adj||0); // 领红利
+      cf+=(row.survival_benefit||0); // 领年金(含红利)
       if(y===yrs-1) cf+=(row.total_cv||row.guaranteed_cv); // 最后一年退保
       cfs.push(cf);
     }

@@ -426,8 +426,8 @@ function calcZHYP(age,sex,pmtP,prem,d){
 function calcQL(age,sex,pmtP,prem,d,annage){
   const share=prem/1000, ann=annage||60;
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+k];
-  // 青鸾版saR = SA/GP*100 (同LJGT格式), saB = saR * prem/100
-  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(saR*prem/100*10)/10;
+  // 青鸾版saR含annage维度: key = sex-pmtP-age-annage
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age+'-'+ann]||0, saB=Math.round(saR*prem/100*10)/10;
   if(!saB)return null;
   const maxYr=Math.min(80, 105-age); let rows=[],cumPre=0, cumJQ=0;
   for(let t=1;t<=maxYr;t++){

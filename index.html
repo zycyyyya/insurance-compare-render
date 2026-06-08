@@ -472,53 +472,77 @@ function calcQL(age,sex,pmtP,prem,d,annage,plan){
 
 // --- 中意意值有（快返年金） ---
 function calcZYA(age,sex,pmtP,prem,d,p){
-  // premium_cv codes: BK系列, rpu codes: AZ系列 — 按排序索引一一对应
-  // 后缀CM=男(sex1), CF=女(sex2): 筛选匹配性别的code
-  const sexSuffix=sex===1?'CM':'CF';
-  const bkAll=Object.keys(d.premium_cv||{}).map(k=>k.split('-')[0]).filter((v,i,a)=>a.indexOf(v)===i).sort();
-  const azAll=Object.keys(d.rpu||{}).map(k=>k.split('-')[0]).filter((v,i,a)=>a.indexOf(v)===i).sort();
-  const bkCodes=bkAll.filter(c=>c.endsWith(sexSuffix));
-  const azCodes=azAll.filter(c=>c.endsWith(sexSuffix));
-  let codeIdx=-1, gp=null;
+  // code映射: PmtP→前缀, 保至105+计划一
+  const prefixMap={1:'BK77',3:'BK78',5:'BK79',6:'BK81',10:'BK80'};
+  const prefix=prefixMap[pmtP]||'BK78';
+  const sexCode=sex===1?'M':'F';
+  const code=prefix+'00'+'C'+sexCode; // age编码为2位数字
 
-  // 用bonus表确认匹配(取第一个可用的code)
-  for(let ci=0;ci<bkCodes.length;ci++){
-    const testKey='计划一|'+pmtP+'-'+sex+'-'+age+'-2';
-    const cvEntry=d.premium_cv[bkCodes[ci]+'-0'];
-    if(cvEntry && d.bonus && d.bonus[testKey]){codeIdx=ci; gp=cvEntry[1]; break}
-  }
-  if(codeIdx<0){
-    for(let ci=0;ci<bkCodes.length;ci++){
-      const cvEntry=d.premium_cv[bkCodes[ci]+'-0'];
-      if(cvEntry){codeIdx=ci; gp=cvEntry[1]; break}
+  // 查找最近匹配的code (age可能不精确匹配,取≥的最小age)
+  let bestCode=null,gp=null;
+  for(const c of Object.keys(d.premium_cv||{}).filter(k=>k.startsWith(prefix))){
+    const codeParts=c.split('-')[0];
+    if(!codeParts.endsWith('C'+sexCode))continue;
+    // 提取age: prefix + 2位age + C + sex
+    const ageStr=codeParts.substring(prefix.length,prefix.length+2);
+    const codeAge=parseInt(ageStr);
+    if(codeAge===age){
+      const entry=d.premium_cv[codeParts+'-0'];
+      if(entry){bestCode=codeParts;gp=entry[1];break;}
     }
   }
-  if(codeIdx<0)return null;
+  // 回退: 取该prefix的第一个匹配code
+  if(!bestCode){
+    for(const c of Object.keys(d.premium_cv||{})){
+      const codeParts=c.split('-')[0];
+      if(codeParts.startsWith(prefix)&&codeParts.endsWith('C'+sexCode)){
+        const entry=d.premium_cv[codeParts+'-0'];
+        if(entry){bestCode=codeParts;gp=entry[1];break;}
+      }
+    }
+  }
+  if(!bestCode||!gp)return null;
 
-  const bkCode=bkCodes[codeIdx], azCode=azCodes[codeIdx]||bkCode;
+  // basicSA = CEIL(10000/gp*1000) × (prem/payFreq/10000)
   const gpR=Math.round(gp*10)/10;
-  const saPerShare=Math.ceil(1000/gpR*1000);
-  const shares=Math.floor(prem/1000*10000)/10000;
-  const saB=Math.floor(saPerShare*shares);
+  const saFactor=Math.ceil(10000/gpR*1000);
+  const payFreq=1; // 年交
+  const premFactor=Math.round(prem/payFreq/10000*10000)/10000;
+  const saB=Math.floor(saFactor*premFactor);
+  if(!saB)return null;
+
+  // 查找匹配的 rpu code (AZ前缀, 同数字部分)
+  const numPart=bestCode.substring(2); // e.g. "7800CM"
+  let rpuCode=null;
+  for(const c of Object.keys(d.rpu||{})){
+    const rp=c.split('-')[0];
+    if(rp.substring(2)===numPart){rpuCode=rp;break;}
+  }
+  if(!rpuCode)rpuCode=bestCode.replace('BK','AZ');
+
   const maxYr=105-age; let rows=[],cumPre=0,cumBns=0;
   for(let t=1;t<=maxYr;t++){
     const pr=t<=pmtP?prem:0; cumPre+=pr;
-    const cvR=d.premium_cv[bkCode+'-'+t]; const cvPU=cvR?cvR[0]:0;
-    const rpu=d.rpu[azCode+'-'+t]||0;
-    // bonus: 年金=bonus_val (每1000保额金额)
+    const cvR=d.premium_cv[bestCode+'-'+t];
+    const cvPU=cvR?cvR[0]:0;
+    const gCV=Math.round(saB*cvPU/10000);
+    // 保证生存金: 交费期满后每年领取基本保额
+    const guaranteedPayout=t>pmtP?saB:0;
+    // 红利: bonus_val是每1000保额的红利金额(现金红利)
     let bnsSA=0;
-    for(const plan of ['计划一','计划二','计划三','Plan1','Plan2']){
+    for(const plan of ['计划一','计划二','计划三']){
       const key=plan+'|'+pmtP+'-'+sex+'-'+age+'-'+t;
       if(d.bonus&&d.bonus[key]){bnsSA=d.bonus[key];break}
     }
-    const gCV=Math.round(saB*cvPU/10000);
-    const curAge=age+t;
-    let gDB=Math.max(Math.round(cumPre),gCV);
-    const survivalAmt=Math.round(saB*bnsSA/1000);
-    const aBSA=Math.round(saB*bnsSA/100000); cumBns+=aBSA;
+    const bonusPayout=Math.round(saB*bnsSA/1000);
+    // bCV via RPU
+    const rpu=d.rpu[rpuCode+'-'+t]||0;
+    const aBSA=Math.round(saB*bnsSA/100000);cumBns+=aBSA;
     const bCV=Math.round(cumBns*rpu/10000);
-    rows.push({year:t,age:curAge,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:survivalAmt,maturity_benefit:0,
+    const gDB=Math.max(Math.round(cumPre),gCV);
+
+    rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:guaranteedPayout+bonusPayout,maturity_benefit:0,
       raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0)});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};

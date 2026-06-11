@@ -96,7 +96,11 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
 </div>
 
 <script>
-let catalog=[], dataCache={}, charts=[], results=[], activeCat='all';
+let catalog=[], dataCache={}, charts=[], results=[], activeCat='all', irrAll=[];
+let _db=null;
+function openDB(){if(_db)return Promise.resolve(_db);return new Promise(r=>{const req=indexedDB.open('ins-cache',1);req.onupgradeneeded=e=>e.target.result.createObjectStore('data');req.onsuccess=e=>{_db=e.target.result;r(_db)};req.onerror=()=>r(null)})}
+async function idbGet(k){const db=await openDB();if(!db)return null;return new Promise(r=>{const tx=db.transaction('data','readonly');const req=tx.objectStore('data').get(k);req.onsuccess=()=>r(req.result||null);req.onerror=()=>r(null)})}
+async function idbPut(k,v){const db=await openDB();if(!db)return;const tx=db.transaction('data','readwrite');tx.objectStore('data').put(v,k)}
 
 function fmt(n,d=0){if(n==null)return'-';return Number(n).toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d})}
 
@@ -104,8 +108,8 @@ function fmt(n,d=0){if(n==null)return'-';return Number(n).toLocaleString('zh-CN'
 const CAT_MAP={'增额终身寿':'zeng额','分红快返年金':'快返','分红养老年金':'养老'};
 
 // ====== 加载产品目录 ======
-fetch('data/catalog.js?'+Date.now()).then(r=>r.text()).then(txt=>{
-  eval(txt); catalog=window.__CATALOG;
+fetch('data/catalog.json?'+Date.now()).then(r=>r.json()).then(data=>{
+  catalog=data;
   renderCatTabs();
   renderProdGrid();
 });
@@ -168,13 +172,11 @@ function toggleProd(i,on){
 // ====== 数据加载 ======
 async function loadData(p){
   if(dataCache[p.name]) return dataCache[p.name];
-  return new Promise((resolve,reject)=>{
-    const s=document.createElement('script');
-    s.src='data/'+p.name+'.js?'+Date.now();
-    s.onload=()=>{dataCache[p.name]=window['__'+p.name];resolve(dataCache[p.name])};
-    s.onerror=reject;
-    document.head.appendChild(s);
-  });
+  try{const c=await idbGet(p.name);if(c){dataCache[p.name]=c;return c;}}catch(e){}
+  const data=await fetch('data/'+p.name+'.json?'+Date.now()).then(r=>r.json());
+  dataCache[p.name]=data;
+  try{idbPut(p.name,data);}catch(e){}
+  return data;
 }
 
 // ====== 计算 ======
@@ -646,7 +648,7 @@ function render(){
 
   const simpleRates=results.map(r=>calcSimpleRate(r.rows,r.annual_premium,r.pmt_p));
   // IRR优化：只计算展示年度，不计算全部105年
-  const irrAll=results.map(r=>{
+  irrAll=results.map(r=>{
     const full=new Array(r.rows.length).fill(null);
     for(const yr of showSet){
       if(yr<2)continue;

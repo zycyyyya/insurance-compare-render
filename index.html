@@ -210,7 +210,7 @@ async function calcAll(){
       else if(ct==='ljgt_annuity') r=calcLJGT(a,s,pt,pr,d,t.p);
       else if(ct==='changcheng_annuity') r=calcCC(a,s,pt,pr,d,t.p);
       else if(ct==='zhongyou_pension') r=calcZHYP(a,s,pt,pr,d,ann);
-      else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann,plan);
+      else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann,plan,t.p);
       else if(ct==='zhongyi_annuity') r=calcZYA(a,s,pt,pr,d,t.p);
       else continue;
       if(!r||!r.rows) continue;
@@ -405,7 +405,7 @@ function calcCC(age,sex,pmtP,prem,d,p){
 // --- 中邮乐享鑫年（养老年金，per-1000-premium数据） ---
 // factors: [cv, sb, mb, db, bonus_begin, bonus_end, jq_factor, jq_sa, jq_cv, jq_bb, jq_be, jq_sb, jq_mb, jq_db]
 function calcZHYP(age,sex,pmtP,prem,d,annage){
-  const share=prem/1000, DR=0.7, divRate=0.035, ann=annage||60;
+  const share=prem/1000, DR=(p&&p.meta&&p.meta.dividend_ratio)||0.7, divRate=(p&&p.meta&&p.meta.dividend_rate)||0.035, ann=annage||60;
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+k];
   const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age+'-'+ann]||0, saB=Math.round(saR*share);
   if(!saB)return null;
@@ -420,7 +420,7 @@ function calcZHYP(age,sex,pmtP,prem,d,annage){
     const sb=sbF>0?Math.round(sbF*share):0;
     const mb=mbF>0?Math.round(mbF*share):0;
     // 红利: bonusBase*share * 演示利率 * 实现率 = 分红金额(元)
-    const bonusBase=(bbF+beF)/2;
+    const bonusBase=bbF;
     const yrDiv=bonusBase>0?Math.round(bonusBase*share*divRate*DR):0;
     // 交清增额: yrDiv / jqF → JQ保额(SA); bCV = JQ保额 × (cv_per_SA)
     const annJQ=jqF>0?yrDiv/jqF:0; cumJQ+=annJQ;
@@ -439,7 +439,7 @@ function calcZHYP(age,sex,pmtP,prem,d,annage){
 
 // --- 青鸾版（养老年金，per-1000-premium数据，含领取年龄+方案选择） ---
 // factors: [csv, rsv, rb_cv, rbrsv, rbnp] key含annage-plan-yr
-function calcQL(age,sex,pmtP,prem,d,annage,plan){
+function calcQL(age,sex,pmtP,prem,d,annage,plan,p){
   const share=prem/1000, ann=annage||60, pl=plan||1;
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+pl+'-'+k];
   // 青鸾版saR含annage+plan维度: key = sex-pmtP-age-annage-plan
@@ -458,12 +458,12 @@ function calcQL(age,sex,pmtP,prem,d,annage,plan){
     // JQ现价 = gCV × 0.009 × Σ(1+r)^i, r=adRM×DR
     let bCV=0, bDB=0, bSB=0;
     if(gCV>0){
-      const r=0.039*0.7; // 演示红利利率
+      const divRate=(p&&p.meta&&p.meta.dividend_rate)||0.039; const DR=(p&&p.meta&&p.meta.dividend_ratio)||0.7; const r=divRate*DR; // 演示红利利率
       let compound=0;
       for(let i=1;i<=t;i++) compound+=Math.pow(1+r,i);
-      bCV=Math.round(gCV*0.009*compound*10)/10;
-      bDB=Math.round(gCV*0.009*compound*(rbrsvF/csvF)*10)/10;
-      bSB=Math.round(gCV*0.009*compound*(rbnpF/csvF)*10)/10;
+      bCV=Math.round(gCV*divRate*compound*10)/10;
+      bDB=Math.round(gCV*divRate*compound*(rbrsvF/csvF)*10)/10;
+      bSB=Math.round(gCV*divRate*compound*(rbnpF/csvF)*10)/10;
     }
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
       guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout+bSB,maturity_benefit:0,

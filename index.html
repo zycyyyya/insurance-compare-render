@@ -437,33 +437,40 @@ function calcZHYP(age,sex,pmtP,prem,d,annage){
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
 
-// --- 青鸾版（养老年金，per-1000-premium数据，含领取年龄+方案选择） ---
-// factors: [csv, rsv, rb_cv, rbrsv, rbnp] key含annage-plan-yr
+// --- 青鸾版（养老年金，交清增额逻辑） ---
+// factors: [csv, rsv_t, rb_cv_t, rbrsv_t, rbnp_t] key含annage-plan-yr
+// rsv_t=RSV因子, rb_cv_t=RB_CV因子, rbrsv_t=RBRSV因子, rbnp_t=RBNP因子
 function calcQL(age,sex,pmtP,prem,d,annage,plan,p){
   const share=prem/1000, ann=annage||60, pl=plan||1;
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+pl+'-'+k];
-  // 青鸾版saR含annage+plan维度: key = sex-pmtP-age-annage-plan
   const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+pl]||0, saB=Math.round(saR*prem/100*10)/10;
   if(!saB)return null;
+  const divRate=(p&&p.meta&&p.meta.dividend_rate)||0.039;
+  const guaranteeRate=(p&&p.meta&&p.meta.guarantee_rate)||0.0175;
+  const DR=(p&&p.meta&&p.meta.dividend_ratio)||0.7;
   const maxYr=Math.min(80, 105-age); let rows=[],cumPre=0;
+  let cumAO=0; // 累积交清增额单位 (AO = AG + AN)
   for(let t=1;t<=maxYr;t++){
     const pr=t<=pmtP?prem:0; cumPre+=pr;
     const f=L(t); if(!f&&t>1)break; if(!f)continue;
-    const csvF=f[0],rsvF=f[1],rbCvF=f[2],rbrsvF=f[3],rbnpF=f[4];
+    const csvF=f[0],rsvT=f[1],rbCvT=f[2],rbrsvT=f[3],rbnpT=f[4];
     const gCV=Math.round(csvF*share);
-    const gDB=Math.max(Math.round(rsvF*share),cumPre,gCV);
-    // 年金 = 基本保额 (达到领取年龄后每年固定领取)
+    const gDB=Math.max(Math.round(rsvT*share),cumPre,gCV);
     const annualPayout=age+t>=ann?saB:0;
-    // 红利JQ累积: 基于每年保证CV的3.9%×70%演示红利，按复利积累
-    // JQ现价 = gCV × 0.009 × Σ(1+r)^i, r=adRM×DR
+    // 交清增额逻辑: AD = AO × rb_cv_t × share
+    // AC = (RSV_t + RBRSV_t × AO_prev) × (演示利率 - 定价利率) × 70%
+    // AE = AC / RBNP_t (当年购买单位)
+    // AG = AE + AO_prev (分红后累积)
+    // AO = AG + AN (AN=0简化，因为前5年H=0)
     let bCV=0, bDB=0, bSB=0;
     if(gCV>0){
-      const divRate=(p&&p.meta&&p.meta.dividend_rate)||0.039; const DR=(p&&p.meta&&p.meta.dividend_ratio)||0.7; const r=divRate*DR; // 演示红利利率
-      let compound=0;
-      for(let i=1;i<=t;i++) compound+=Math.pow(1+r,i);
-      bCV=Math.round(gCV*divRate*compound*10)/10;
-      bDB=Math.round(gCV*divRate*compound*(rbrsvF/csvF)*10)/10;
-      bSB=Math.round(gCV*divRate*compound*(rbnpF/csvF)*10)/10;
+      const ac=(rsvT+rbrsvT*cumAO)*(divRate-guaranteeRate)*DR;
+      const ae=rbnpT>0?ac/rbnpT:0;
+      const ag=ae+cumAO;
+      cumAO=ag; // AN=0 simplified
+      bCV=Math.round(cumAO*rbCvT*share);
+      bDB=Math.round(cumAO*rbrsvT*share);
+      bSB=Math.round(cumAO*rbnpT*share);
     }
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
       guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout+bSB,maturity_benefit:0,

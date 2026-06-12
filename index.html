@@ -6,6 +6,7 @@
 <title>分红型保险 · 利益演示对比</title>
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pako@2.1.0/dist/pako.min.js"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}
 body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f5f7fa;color:#333}
@@ -169,11 +170,23 @@ function toggleProd(i,on){
   document.getElementById('card'+i).classList.toggle('selected',on);
 }
 
-// ====== 数据加载 ======
+// ====== 数据加载（gzip优先） ======
 async function loadData(p){
   if(dataCache[p.name]) return dataCache[p.name];
   try{const c=await idbGet(p.name);if(c){dataCache[p.name]=c;return c;}}catch(e){}
-  const data=await fetch('data/'+p.name+'.json?'+Date.now()).then(r=>r.json());
+  // 优先加载.gz文件
+  let data;
+  try{
+    const resp=await fetch('data/'+p.name+'.json.gz?'+Date.now());
+    if(resp.ok){
+      const buf=await resp.arrayBuffer();
+      const decompressed=pako.inflate(new Uint8Array(buf),{to:'string'});
+      data=JSON.parse(decompressed);
+    }
+  }catch(e){}
+  if(!data){
+    data=await fetch('data/'+p.name+'.json?'+Date.now()).then(r=>r.json());
+  }
   dataCache[p.name]=data;
   try{idbPut(p.name,data);}catch(e){}
   return data;

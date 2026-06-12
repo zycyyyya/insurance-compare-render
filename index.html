@@ -172,13 +172,15 @@ function toggleProd(i,on){
 
 // ====== 数据加载（gzip优先，支持按需拆分） ======
 async function loadData(p, annage, plan){
-  const cacheKey = p.name + (annage ? `_${annage}_${plan||1}` : '');
+  const cacheKey = p.name + (annage ? `_${annage}_${plan||''}` : '');
   if(dataCache[cacheKey]) return dataCache[cacheKey];
   try{const c=await idbGet(cacheKey);if(c){dataCache[cacheKey]=c;return c;}}catch(e){}
-  // 确定加载路径
+  // 确定加载路径（养老年金按需拆分）
   let basePath = 'data/' + p.name;
   if(p.meta.calc_type === 'qingluan_pension' && annage){
     basePath = `data/qingluan/${annage}-${plan||1}`;
+  } else if(p.meta.calc_type === 'zhongyou_pension' && annage){
+    basePath = `data/zhongyou_pension/${annage}`;
   }
   // 优先加载.gz文件
   let data;
@@ -214,15 +216,18 @@ async function calcAll(){
     if(!cb||!cb.checked) continue;
     todo.push({idx:i,p:catalog[i],rate:parseInt(document.getElementById('rate'+i).value)/100});
   }
-  // 并行加载所有数据（青鸾版按需加载）
+  // 并行加载所有数据（养老年金按需加载）
   await Promise.all(todo.map(t=>{
     if(t.p.meta.calc_type==='qingluan_pension') return loadData(t.p, ann, plan);
+    if(t.p.meta.calc_type==='zhongyou_pension') return loadData(t.p, ann);
     return loadData(t.p);
   }));
 
   // 逐个计算（计算本身很快，瓶颈在数据加载和IRR）
   for(const t of todo){
-    const cacheKey = t.p.meta.calc_type==='qingluan_pension' ? `${t.p.name}_${ann}_${plan}` : t.p.name;
+    let cacheKey = t.p.name;
+    if(t.p.meta.calc_type==='qingluan_pension') cacheKey = `${t.p.name}_${ann}_${plan}`;
+    else if(t.p.meta.calc_type==='zhongyou_pension') cacheKey = `${t.p.name}_${ann}`;
     const d=dataCache[cacheKey];
     let r;
     const ct=t.p.meta.calc_type;
@@ -430,8 +435,9 @@ function calcCC(age,sex,pmtP,prem,d,p){
 // factors: [cv, sb, mb, db, bonus_begin, bonus_end, jq_factor, jq_sa, jq_cv, jq_bb, jq_be, jq_sb, jq_mb, jq_db]
 function calcZHYP(age,sex,pmtP,prem,d,annage){
   const share=prem/1000, DR=(p&&p.meta&&p.meta.dividend_ratio)||0.7, divRate=(p&&p.meta&&p.meta.dividend_rate)||0.035, ann=annage||60;
-  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+k];
-  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age+'-'+ann]||0, saB=Math.round(saR*share);
+  // 拆分后key格式: sex-pmtP-age-year (不含annage)
+  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k];
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(saR*share);
   if(!saB)return null;
   const maxYr=105-age; let rows=[],cumPre=0,cumJQ=0;
   for(let t=1;t<=maxYr;t++){

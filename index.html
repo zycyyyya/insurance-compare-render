@@ -170,14 +170,20 @@ function toggleProd(i,on){
   document.getElementById('card'+i).classList.toggle('selected',on);
 }
 
-// ====== 数据加载（gzip优先） ======
-async function loadData(p){
-  if(dataCache[p.name]) return dataCache[p.name];
-  try{const c=await idbGet(p.name);if(c){dataCache[p.name]=c;return c;}}catch(e){}
+// ====== 数据加载（gzip优先，支持按需拆分） ======
+async function loadData(p, annage, plan){
+  const cacheKey = p.name + (annage ? `_${annage}_${plan||1}` : '');
+  if(dataCache[cacheKey]) return dataCache[cacheKey];
+  try{const c=await idbGet(cacheKey);if(c){dataCache[cacheKey]=c;return c;}}catch(e){}
+  // 确定加载路径
+  let basePath = 'data/' + p.name;
+  if(p.meta.calc_type === 'qingluan_pension' && annage){
+    basePath = `data/qingluan/${annage}-${plan||1}`;
+  }
   // 优先加载.gz文件
   let data;
   try{
-    const resp=await fetch('data/'+p.name+'.json.gz?'+Date.now());
+    const resp=await fetch(basePath+'.json.gz?'+Date.now());
     if(resp.ok){
       const buf=await resp.arrayBuffer();
       const decompressed=pako.inflate(new Uint8Array(buf),{to:'string'});
@@ -185,10 +191,11 @@ async function loadData(p){
     }
   }catch(e){}
   if(!data){
-    data=await fetch('data/'+p.name+'.json?'+Date.now()).then(r=>r.json());
+    try{data=await fetch(basePath+'.json?'+Date.now()).then(r=>r.json());}catch(e){}
   }
-  dataCache[p.name]=data;
-  try{idbPut(p.name,data);}catch(e){}
+  if(!data) return null;
+  dataCache[cacheKey]=data;
+  try{idbPut(cacheKey,data);}catch(e){}
   return data;
 }
 
@@ -207,12 +214,16 @@ async function calcAll(){
     if(!cb||!cb.checked) continue;
     todo.push({idx:i,p:catalog[i],rate:parseInt(document.getElementById('rate'+i).value)/100});
   }
-  // 并行加载所有数据
-  await Promise.all(todo.map(t=>loadData(t.p)));
+  // 并行加载所有数据（青鸾版按需加载）
+  await Promise.all(todo.map(t=>{
+    if(t.p.meta.calc_type==='qingluan_pension') return loadData(t.p, ann, plan);
+    return loadData(t.p);
+  }));
 
   // 逐个计算（计算本身很快，瓶颈在数据加载和IRR）
   for(const t of todo){
-    const d=dataCache[t.p.name];
+    const cacheKey = t.p.meta.calc_type==='qingluan_pension' ? `${t.p.name}_${ann}_${plan}` : t.p.name;
+    const d=dataCache[cacheKey];
     let r;
     const ct=t.p.meta.calc_type;
       if(ct==='taiyingjia') r=calcTYJ(a,s,pt,pr,d);
@@ -450,13 +461,12 @@ function calcZHYP(age,sex,pmtP,prem,d,annage){
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
 
-// --- 青鸾版（养老年金，交清增额逻辑） ---
-// factors: [csv, rsv_t, rb_cv_t, rbrsv_t, rbnp_t] key含annage-plan-yr
-// rsv_t=RSV因子, rb_cv_t=RB_CV因子, rbrsv_t=RBRSV因子, rbnp_t=RBNP因子
+// --- 青鸾版（养老年金，交清增额逻辑，按需拆分） ---
+// 拆分后key格式: sex-pmtP-age-year (不含annage-plan)
 function calcQL(age,sex,pmtP,prem,d,annage,plan,p){
   const share=prem/1000, ann=annage||60, pl=plan||1;
-  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+pl+'-'+k];
-  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age+'-'+ann+'-'+pl]||0, saB=Math.round(saR*prem/100*10)/10;
+  const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k];
+  const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(saR*prem/100*10)/10;
   if(!saB)return null;
   const divRate=(p&&p.meta&&p.meta.dividend_rate)||0.039;
   const guaranteeRate=(p&&p.meta&&p.meta.guarantee_rate)||0.0175;

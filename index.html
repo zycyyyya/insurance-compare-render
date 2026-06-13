@@ -238,7 +238,7 @@ async function calcAll(){
       // === 新增年金产品 ===
       else if(ct==='ljgt_annuity') r=calcLJGT(a,s,pt,pr,d,t.p);
       else if(ct==='changcheng_annuity') r=calcCC(a,s,pt,pr,d,t.p);
-      else if(ct==='zhongyou_pension') r=calcZHYP(a,s,pt,pr,d,ann);
+      else if(ct==='zhongyou_pension') r=calcZHYP(a,s,pt,pr,d,ann,t.p);
       else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann,plan,t.p);
       else if(ct==='zhongyi_annuity') r=calcZYA(a,s,pt,pr,d,t.p);
       else continue;
@@ -433,7 +433,7 @@ function calcCC(age,sex,pmtP,prem,d,p){
 
 // --- 中邮乐享鑫年（养老年金，per-1000-premium数据） ---
 // factors: [cv, sb, mb, db, bonus_begin, bonus_end, jq_factor, jq_sa, jq_cv, jq_bb, jq_be, jq_sb, jq_mb, jq_db]
-function calcZHYP(age,sex,pmtP,prem,d,annage){
+function calcZHYP(age,sex,pmtP,prem,d,annage,p){
   const share=prem/1000, DR=(p&&p.meta&&p.meta.dividend_ratio)||0.7, divRate=(p&&p.meta&&p.meta.dividend_rate)||0.035, ann=annage||60;
   // 拆分后key格式: sex-pmtP-age-year (不含annage)
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k];

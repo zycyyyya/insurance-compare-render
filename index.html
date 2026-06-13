@@ -172,7 +172,9 @@ function toggleProd(i,on){
 
 // ====== 数据加载（gzip优先，支持按需拆分） ======
 async function loadData(p, annage, plan){
-  const cacheKey = p.name + (annage ? `_${annage}_${plan||''}` : '');
+  const cacheKey = p.name + (annage ? `_${annage}${plan!=null?'_'+plan:''}` : '');
+  // 修复: 养老年金(如中邮)无plan时,cacheKey应与calcAll一致(不带末尾下划线)
+  // 统一格式: name_annage 或 name_annage_plan
   if(dataCache[cacheKey]) return dataCache[cacheKey];
   try{const c=await idbGet(cacheKey);if(c){dataCache[cacheKey]=c;return c;}}catch(e){}
   // 确定加载路径（养老年金按需拆分）
@@ -229,6 +231,7 @@ async function calcAll(){
     if(t.p.meta.calc_type==='qingluan_pension') cacheKey = `${t.p.name}_${ann}_${plan}`;
     else if(t.p.meta.calc_type==='zhongyou_pension') cacheKey = `${t.p.name}_${ann}`;
     const d=dataCache[cacheKey];
+    if(!d) continue; // 数据加载失败时跳过该产品,避免TypeError导致整个计算中断
     let r;
     const ct=t.p.meta.calc_type;
       if(ct==='taiyingjia') r=calcTYJ(a,s,pt,pr,d);
@@ -423,9 +426,8 @@ function calcCC(age,sex,pmtP,prem,d,p){
     const bCV=Math.round(cumBns); // 累积红利(简化)
     // 快返年金: 达到BPstart年开始每年领取年金=saB + 年金分红
     const annualPayout=t>=bpStart?saB:0;
-    const bonusPayout=t>=bpStart?annualDiv:0;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout+bonusPayout,maturity_benefit:0,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout,maturity_benefit:0,
       raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0),annual_dividend:annualDiv});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};

@@ -374,8 +374,9 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
     const sb=sbF>0?Math.round(sbRaw/sbFactor*10)/10:0;
     const mb=mbF>0?Math.round(mbF*saB/SU*10)/10:0;
 
-    // 分红：有RV用完整公式(养老年金)，无RV用简化公式(快返)
+    // 分红：有RV用完整公式(养老年金/交清增额)，无RV用简化公式(快返/现金领取)
     let yrDiv=0;
+    let cashDiv=0; // 快返年金:红利当年领取(现金),不累积到CV
     if(hasPvfb && t>1){
       // 养老年金：前一年RV作红利基础，与前一年RV_PVFB转换
       const pvF=L(t-1);
@@ -385,7 +386,7 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
       cumBns+=bInc;
     }else{
       yrDiv=cvBase>0?Math.round(cvBase*saB/SU*(adRM-adRL)*DR*10)/10:0;
-      cumBns+=yrDiv;
+      cashDiv=yrDiv; // 快返模式:红利直接领取
     }
 
     // 红利现价
@@ -396,12 +397,13 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
       bDB=dbF>0?Math.round(cumBns*dbF/SU*10)/10:0;
       bSB=sbF>0?Math.round(cumBns*sbF/SU/sbFactor*10)/10:0;
     }else{
-      bCV=Math.round(cumBns*10)/10;
-      bDB=Math.max(bCV,0);
+      // 快返模式:红利已直接领取,cumBns不累积,bCV=0
+      bCV=0;
+      bDB=0;
     }
 
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb+bSB,maturity_benefit:mb,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb+bSB+cashDiv,maturity_benefit:mb,
       annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:bDB});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};

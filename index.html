@@ -403,7 +403,7 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
     }
 
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb+bSB+cashDiv,maturity_benefit:mb,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb+cashDiv,maturity_benefit:mb,
       annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:bDB});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
@@ -422,15 +422,13 @@ function calcCC(age,sex,pmtP,prem,d,p){
     const f=L(t); const cvF=f[0],bCVF=f[1];
     const gCV=Math.round(cvF*share);
     const gDB=Math.max(gCV,cumPre);
-    // 红利: 每年红利金额(年度)，累积后按JQ估值
+    // 红利: 每年红利金额(现金领取)
     const annualDiv=bCVF>0?Math.round(bCVF*share):0;
-    cumBns+=annualDiv;
-    const bCV=Math.round(cumBns); // 累积红利(简化)
-    // 快返年金: 达到BPstart年开始每年领取年金=saB + 年金分红
+    // 快返年金: 达到BPstart年开始每年领取年金=saB + 红利现金
     const annualPayout=t>=bpStart?saB:0;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout,maturity_benefit:0,
-      raw_bonus_cv:bCV,raw_bonus_db:Math.max(bCV,0),annual_dividend:annualDiv});
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout+annualDiv,maturity_benefit:0,
+      raw_bonus_cv:0,raw_bonus_db:0,annual_dividend:annualDiv});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
@@ -454,7 +452,7 @@ function calcZHYP(age,sex,pmtP,prem,d,annage,p){
     const sb=sbF>0?Math.round(sbF*share):0;
     const mb=mbF>0?Math.round(mbF*share):0;
     // 红利: bonusBase*share * 演示利率 * 实现率 = 分红金额(元)
-    const bonusBase=bbF;
+    const bonusBase=beF;
     const yrDiv=bonusBase>0?Math.round(bonusBase*share*divRate*DR):0;
     // 交清增额: yrDiv / jqF → JQ保额(SA); bCV = JQ保额 × (cv_per_SA)
     const annJQ=jqF>0?yrDiv/jqF:0; cumJQ+=annJQ;
@@ -506,7 +504,7 @@ function calcQL(age,sex,pmtP,prem,d,annage,plan,p){
       bSB=Math.round(cumAO*rbnpT*share);
     }
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout+bSB,maturity_benefit:0,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:annualPayout,maturity_benefit:0,
       raw_bonus_cv:bCV,raw_bonus_db:Math.max(bDB,0)});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};

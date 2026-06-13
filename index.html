@@ -290,11 +290,11 @@ function calcZY(age,sex,pmtP,prem,d,p){
   const saB=Math.floor(saPerShare*shares);
   const maxYr=105-age; let rows=[],cumPre=0,cumBns=0;
   const prods=p.meta.products; const pn=prods&&prods[0]?prods[0].name:'';
-  // v2: factors[key]=[premium,cv,rpu]
+  // factors[key]=[cv_factor,gp,rpu_factor]: f[0]=CV因子(随年增长), f[1]=gp(常数), f[2]=RPU因子(随年增长)
   for(let t=1;t<=maxYr;t++){
     const pr=t<=pmtP?prem:0; cumPre+=pr;
     const f=d.factors[code+'-'+t]||[0,0,0];
-    const cvPU=f[1], rpu=f[2];
+    const cvPU=f[0], rpu=f[2];
     const bnsR=d.bonus[pn+'|'+pmtP+'-'+sex+'-'+age+'-'+t]; const bnsSA=bnsR?bnsR[0]:0;
     const saCur=Math.round(saB*Math.pow(1+SG,t-1));
     const gCV=Math.round(saB*cvPU/10000);

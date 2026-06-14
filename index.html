@@ -134,7 +134,7 @@ function supportReason(p,age,pmtP,annage,plan){
 }
 function calcBasisText(r){
   if(r.category==='分红快返年金')return '现金流=保费+保证年金+现金红利，期末=总CV';
-  if(r.category==='分红养老年金')return r.has_irr_guaranteed_terminal?'现金流=保费+保证年金，期末=保证CV':'现金流=保费+保证年金，期末=总CV';
+  if(r.category==='分红养老年金')return '现金流=保费+保证年金，红利不当年领取，期末=总CV';
   return '现金流=保费，期末=总CV';
 }
 
@@ -445,7 +445,7 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
     const survivalBenefit=hasPvfb?sb:sb+cashDiv;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
       guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:survivalBenefit,maturity_benefit:mb,
-      annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:bDB,irr_terminal_cv:hasPvfb?gCV:null});
+      annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:bDB});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }

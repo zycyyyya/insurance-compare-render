@@ -28,6 +28,7 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f5f7fa;c
 .prod-card input[type=checkbox]{width:16px;height:16px;accent-color:#2952a3}
 .prod-card .cat-badge{font-size:10px;padding:2px 6px;border-radius:10px;color:#fff;font-weight:500;margin-left:4px}
 .cat-badge.zeng额{background:#8e44ad}.cat-badge.快返{background:#e67e22}.cat-badge.养老{background:#27ae60}
+.prod-meta{font-size:11px;color:#666;line-height:1.5;margin:4px 0 2px;padding-left:24px}
 .prod-card .slider-row{display:flex;align-items:center;gap:8px;font-size:11px;color:#666;margin-top:6px}
 .prod-card .slider-row input[type=range]{flex:1}
 .prod-card .slider-row span{min-width:36px;text-align:right;font-weight:600}
@@ -44,6 +45,13 @@ body{font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f5f7fa;c
 .card{background:#f8f9fb;padding:8px 10px;border-radius:6px;border:1px solid #eee}
 .card .label{font-size:10px;color:#888}.card .value{font-size:15px;font-weight:700;color:#1a2a6c;margin:2px 0}
 .card .sub{font-size:10px;color:#666}
+.metric-table{max-height:360px;overflow:auto}
+.metric-table table{font-size:12px}
+.metric-table th,.metric-table td{padding:7px 6px}
+.scope-bar{display:flex;flex-wrap:wrap;gap:8px;font-size:11px;color:#555;line-height:1.5}
+.scope-bar span{background:#f5f7fa;border:1px solid #e7ebf0;border-radius:6px;padding:4px 8px}
+.skip-list{font-size:12px;line-height:1.7;color:#8a5a00}
+.skip-list b{color:#7a4b00}
 .chart-row{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .chart-box{position:relative;height:300px}
 .chart-box.full{grid-column:1/-1;height:340px}
@@ -52,6 +60,9 @@ table{width:100%;border-collapse:collapse;font-size:11px}
 thead th{background:#f8f9fb;padding:6px 4px;text-align:right;font-weight:600;color:#555;border-bottom:2px solid #ddd;position:sticky;top:0;z-index:1;white-space:nowrap}
 thead th:first-child,tbody td:first-child{text-align:center}
 tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
+.compare-table th:nth-child(1),.compare-table td:nth-child(1){position:sticky;left:0;background:#fff;z-index:2}
+.compare-table th:nth-child(2),.compare-table td:nth-child(2){position:sticky;left:44px;background:#fff;z-index:2}
+.compare-table thead th:nth-child(1),.compare-table thead th:nth-child(2){background:#f8f9fb;z-index:3}
 .num{font-variant-numeric:tabular-nums;font-family:"SF Mono","Consolas",monospace}
 .loading{text-align:center;padding:30px;color:#999}
 .error{color:#e74c3c;padding:10px;background:#fdeaea;border-radius:6px;margin:8px 0}
@@ -97,13 +108,35 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
 </div>
 
 <script>
-let catalog=[], dataCache={}, charts=[], results=[], activeCat='all', irrAll=[];
+let catalog=[], dataCache={}, charts=[], results=[], activeCat='all', irrAll=[], skipped=[];
 let _db=null;
 function openDB(){if(_db)return Promise.resolve(_db);return new Promise(r=>{const req=indexedDB.open('ins-cache',1);req.onupgradeneeded=e=>e.target.result.createObjectStore('data');req.onsuccess=e=>{_db=e.target.result;r(_db)};req.onerror=()=>r(null)})}
 async function idbGet(k){const db=await openDB();if(!db)return null;return new Promise(r=>{const tx=db.transaction('data','readonly');const req=tx.objectStore('data').get(k);req.onsuccess=()=>r(req.result||null);req.onerror=()=>r(null)})}
 async function idbPut(k,v){const db=await openDB();if(!db)return;const tx=db.transaction('data','readwrite');tx.objectStore('data').put(v,k)}
 
 function fmt(n,d=0){if(n==null)return'-';return Number(n).toLocaleString('zh-CN',{minimumFractionDigits:d,maximumFractionDigits:d})}
+function pct(v){return v==null?'-':v.toFixed(2)+'%'}
+function prodDef(p){return p.meta.products&&p.meta.products[0]?p.meta.products[0]:{}}
+function rangeText(a){return Array.isArray(a)?(a.length===2&&a[1]-a[0]>1?a[0]+'-'+a[1]:a.join('/')):'-'}
+function productScopeText(p){
+  const d=prodDef(p), parts=['年龄 '+rangeText(d.ages),'交费 '+rangeText(d.pay_terms)+'年'];
+  if(d.annages)parts.push('领取 '+rangeText(d.annages)+'岁');
+  if(d.plans)parts.push('方案 '+rangeText(d.plans));
+  return parts.join(' · ');
+}
+function supportReason(p,age,pmtP,annage,plan){
+  const d=prodDef(p), rs=[];
+  if(d.ages&&(age<d.ages[0]||age>d.ages[1]))rs.push('年龄不在'+rangeText(d.ages)+'岁');
+  if(d.pay_terms&&!d.pay_terms.includes(pmtP))rs.push('不支持'+pmtP+'年交');
+  if(d.annages&&!d.annages.includes(annage))rs.push('不支持'+annage+'岁领取');
+  if(d.plans&&!d.plans.includes(plan))rs.push('不支持计划'+plan);
+  return rs.join('，');
+}
+function calcBasisText(r){
+  if(r.category==='分红快返年金')return '现金流=保费+保证年金+现金红利，期末=总CV';
+  if(r.category==='分红养老年金')return r.has_irr_guaranteed_terminal?'现金流=保费+保证年金，期末=保证CV':'现金流=保费+保证年金，期末=总CV';
+  return '现金流=保费，期末=总CV';
+}
 
 // ====== 分类 ======
 const CAT_MAP={'增额终身寿':'zeng额','分红快返年金':'快返','分红养老年金':'养老'};
@@ -156,6 +189,7 @@ function renderProdGrid(){
     const badgeCls=CAT_MAP[cat]||'zeng额';
     h+=`<div class="prod-card selected" id="card${i}">
       <label><input type="checkbox" checked onchange="toggleProd(${i},this.checked)">${p.label}<span class="cat-badge ${badgeCls}">${badge}</span></label>
+      <div class="prod-meta">${productScopeText(p)}</div>
       <div class="slider-row">
         <span>分红实现率</span>
         <input type="range" id="rate${i}" min="0" max="200" value="100" oninput="document.getElementById('rateVal${i}').textContent=this.value+'%'">
@@ -206,7 +240,7 @@ async function loadData(p, annage, plan){
 // ====== 计算 ======
 async function calcAll(){
   const a=+age.value, s=+sex.value, pt=+pmtP.value, pr=+premium.value, ann=+annage.value, plan=+planSelect.value;
-  results=[]; charts.forEach(c=>c.destroy()); charts=[];
+  results=[]; skipped=[]; charts.forEach(c=>c.destroy()); charts=[];
   document.getElementById('result').innerHTML='<div class="loading">计算中...</div>';
 
   // 收集需要计算的产品，并行加载数据
@@ -216,6 +250,8 @@ async function calcAll(){
     if(!card||card.classList.contains('hidden'))continue;
     const cb=card.querySelector('input[type=checkbox]');
     if(!cb||!cb.checked) continue;
+    const reason=supportReason(catalog[i],a,pt,ann,plan);
+    if(reason){skipped.push({label:catalog[i].label,reason});continue}
     todo.push({idx:i,p:catalog[i],rate:parseInt(document.getElementById('rate'+i).value)/100});
   }
   // 并行加载所有数据（养老年金按需加载）
@@ -231,7 +267,7 @@ async function calcAll(){
     if(t.p.meta.calc_type==='qingluan_pension') cacheKey = `${t.p.name}_${ann}_${plan}`;
     else if(t.p.meta.calc_type==='zhongyou_pension') cacheKey = `${t.p.name}_${ann}`;
     const d=dataCache[cacheKey];
-    if(!d) continue; // 数据加载失败时跳过该产品,避免TypeError导致整个计算中断
+    if(!d){skipped.push({label:t.p.label,reason:'数据文件未加载成功'});continue}
     let r;
     const ct=t.p.meta.calc_type;
       if(ct==='taiyingjia') r=calcTYJ(a,s,pt,pr,d);
@@ -245,11 +281,15 @@ async function calcAll(){
       else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann,plan,t.p);
       else if(ct==='zhongyi_annuity') r=calcZYA(a,s,pt,pr,d,t.p);
       else continue;
-      if(!r||!r.rows) continue;
+      if(!r||!r.rows){skipped.push({label:t.p.label,reason:'当前参数没有匹配费率'});continue}
       r.label=t.p.label; r.dividend_rate=t.rate; r.category=t.p.meta.category||'增额终身寿';
+      r.has_irr_guaranteed_terminal=r.rows.some(row=>row.irr_terminal_cv!=null);
       results.push(r);
   }
-  if(results.length===0){document.getElementById('result').innerHTML='<div class="error">无产品被选中或计算失败</div>';return}
+  if(results.length===0){
+    const msg=skipped.length?'当前参数下没有可计算产品：'+skipped.map(s=>`${s.label}（${s.reason}）`).join('；'):'无产品被选中或计算失败';
+    document.getElementById('result').innerHTML=`<div class="error">${msg}</div>`;return
+  }
   render();
 }
 
@@ -460,11 +500,8 @@ function calcZHYP(age,sex,pmtP,prem,d,annage,p){
     const bCV=jqCvF>0?Math.round(cumJQ*jqCvF/jqSaF):0;
     const bDB=jqDbF>0?Math.max(Math.round(cumJQ*jqDbF/jqSaF),bCV):bCV;
 
-    // JQ部分的SB/MB (累积红利产生的给付)
-    const jqSB=jqSbF>0?Math.round(cumJQ*jqSbF/jqSaF):0;
-    const totalSB=sb+jqSB;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:totalSB,maturity_benefit:mb,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb,maturity_benefit:mb,
       raw_bonus_cv:bCV,raw_bonus_db:bDB});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
@@ -613,6 +650,24 @@ function calcSimpleRate(rows,premium,pmtP){
 // ====== 渲染 ======
 function render(){
   let html='';
+  const maxYr=Math.min(...results.map(r=>r.rows.length));
+  const showSet=new Set(); for(let y=1;y<=maxYr;y++){if(y<=10||y%5===0||y===maxYr)showSet.add(y)}
+
+  html+='<div class="panel"><div class="panel-header">本次计算口径</div><div class="panel-body">';
+  html+=`<div class="scope-bar">
+    <span>投保年龄 ${results[0].entry_age}岁</span>
+    <span>交费期 ${results[0].pmt_p}年</span>
+    <span>年交保费 ¥${fmt(results[0].annual_premium)}</span>
+    <span>展示年度至第${maxYr}年</span>
+    <span>总CV=保证CV+红利现价×分红实现率</span>
+    <span>单利=总回报/加权投入</span>
+    <span>IRR=逐年现金流折现</span>
+  </div>`;
+  if(skipped.length){
+    html+='<div class="skip-list" style="margin-top:10px"><b>未参与计算：</b>'+skipped.map(s=>`${s.label}（${s.reason}）`).join('；')+'</div>';
+  }
+  html+='</div></div>';
+
   // 对比图表
   html+='<div class="chart-row"><div class="chart-box full"><canvas id="cCmpCV"></canvas></div></div>';
 
@@ -627,11 +682,9 @@ function render(){
   }
 
   const hasSB=results.some(r=>r.rows.some(row=>(row.survival_benefit||0)>0));
-  const maxYr=Math.min(...results.map(r=>r.rows.length));
-  const showSet=new Set(); for(let y=1;y<=maxYr;y++){if(y<=10||y%5===0||y===maxYr)showSet.add(y)}
 
-  // Summary cards
-  html+='<div class="panel"><div class="panel-header">📊 关键指标对比</div><div class="panel-body"><div class="summary-cards">';
+  // Summary table
+  html+='<div class="panel"><div class="panel-header">关键指标对比</div><div class="metric-table"><table><thead><tr><th style="text-align:left">产品</th><th>类别</th><th>分红</th><th>基本保额/年领</th><th>回本年</th><th>翻倍年</th><th>10年IRR</th><th>20年IRR</th><th>20年总CV</th><th>累计领取</th><th style="text-align:left">IRR口径</th></tr></thead><tbody>';
   for(const r of results){
     let be='—',db2='—',cumSB2=0;
     for(const row of r.rows){
@@ -661,19 +714,25 @@ function render(){
     const irr10v=quickIRR(10); const irr20v=quickIRR(20);
     // 年金产品额外计算：总领取
     let cumSB=0; for(const row of r.rows)cumSB+=(row.survival_benefit||0);
-    html+=`<div class="card"><div class="label">${r.label}<br>分红${Math.round(r.dividend_rate*100)}%</div>
-      <div class="value">${fmt(r.sa_basic,1)}</div>
-      <div class="sub">保额 | 回本${be}年 | 翻倍${db2}年</div>
-      <div class="sub">10年CV ${fmt(row10?row10.total_cv:0)} | 20年CV ${fmt(row20?row20.total_cv:0)}</div>
-      <div class="sub">10年IRR ${irr10v!=null?irr10v.toFixed(2)+'%':'-'} | 20年IRR ${irr20v!=null?irr20v.toFixed(2)+'%':'-'}</div>
-      ${cumSB>0?`<div class="sub" style="color:#27ae60">累计领取 ¥${fmt(cumSB)}</div>`:''}
-    </div>`;
+    html+=`<tr>
+      <td style="text-align:left;font-weight:600">${r.label}</td>
+      <td>${r.category}</td>
+      <td>${Math.round(r.dividend_rate*100)}%</td>
+      <td class="num">${fmt(r.sa_basic,1)}</td>
+      <td>${be==='—'?'-':be}</td>
+      <td>${db2==='—'?'-':db2}</td>
+      <td class="num">${pct(irr10v)}</td>
+      <td class="num">${pct(irr20v)}</td>
+      <td class="num">${fmt(row20?row20.total_cv:0)}</td>
+      <td class="num">${cumSB>0?fmt(cumSB):'-'}</td>
+      <td style="text-align:left;color:#666">${calcBasisText(r)}</td>
+    </tr>`;
   }
-  html+='</div></div></div>';
+  html+='</tbody></table></div></div>';
 
   // 详细对比表
   const colsPerProduct=hasSB?7:5;
-  html+='<div class="panel"><div class="panel-header">📋 利益演示对比</div><div class="scroll-table"><table><thead><tr><th>年度</th><th>年龄</th>';
+  html+='<div class="panel"><div class="panel-header">利益演示对比</div><div class="scroll-table"><table class="compare-table"><thead><tr><th>年度</th><th>年龄</th>';
   for(const r of results){
     html+=`<th colspan="${colsPerProduct}">${r.label} (分红${Math.round(r.dividend_rate*100)}%)</th>`;
   }

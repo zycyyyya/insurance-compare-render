@@ -695,21 +695,7 @@ function render(){
     const row10=r.rows[9]; const row20=r.rows[19];
     // 快速IRR计算（只算第10年和第20年）
     function quickIRR(yrs){
-      const rows=r.rows.slice(0,yrs); const prem=r.annual_premium; const pp=r.pmt_p;
-      const cfs=[];
-      for(let y=0;y<rows.length;y++){
-        const row=rows[y]; let cf=0;
-        if(y<pp) cf-=prem;
-        cf+=(row.survival_benefit||0);
-        if(y===rows.length-1) cf+=irrTerminalValue(row);
-        cfs.push(cf);
-      }
-      let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);
-      if(flo*fhi>0) return null;
-      for(let it=0;it<60;it++){const mid=(lo+hi)/2,fm=npvAt(mid,cfs);if(Math.abs(fm)<1e-6){lo=hi=mid;break}if(flo*fm<0)hi=mid;else lo=mid;if(hi-lo<1e-10)break}
-      let rate=(lo+hi)/2;
-      for(let it=0;it<30;it++){let npv=cfs[0],dnpv=0;for(let j=1;j<cfs.length;j++){const dv=Math.pow(1+rate,j);npv+=cfs[j]/dv;dnpv+=-j*cfs[j]/Math.pow(1+rate,j+1)}if(Math.abs(dnpv)<1e-15)break;const nr=rate-npv/dnpv;if(Math.abs(nr-rate)<1e-10){rate=nr;break}rate=nr}
-      return isFinite(rate*100)?rate*100:null;
+      return solveIRR(buildIRRCashflows(r.rows.slice(0,yrs),r.annual_premium,r.pmt_p));
     }
     const irr10v=quickIRR(10); const irr20v=quickIRR(20);
     // 年金产品额外计算：总领取
@@ -750,25 +736,7 @@ function render(){
     const full=new Array(r.rows.length).fill(null);
     for(const yr of showSet){
       if(yr<2)continue;
-      const rows=r.rows.slice(0,yr);
-      const cfs=[];
-      for(let y=0;y<rows.length;y++){
-        const row=rows[y];
-        let cf=0;
-        if(y<r.pmt_p) cf-=r.annual_premium;
-        cf+=(row.survival_benefit||0);
-        if(y===rows.length-1) cf+=irrTerminalValue(row);
-        cfs.push(cf);
-      }
-      let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);
-      let irrVal=null;
-      if(flo*fhi<=0){
-        for(let it=0;it<60;it++){const mid=(lo+hi)/2,fm=npvAt(mid,cfs);if(Math.abs(fm)<1e-6){lo=hi=mid;break}if(flo*fm<0)hi=mid;else lo=mid;if(hi-lo<1e-10)break}
-        let rate=(lo+hi)/2;
-        for(let it=0;it<30;it++){let npv=cfs[0],dnpv=0;for(let j=1;j<cfs.length;j++){const dv=Math.pow(1+rate,j);npv+=cfs[j]/dv;dnpv+=-j*cfs[j]/Math.pow(1+rate,j+1)}if(Math.abs(dnpv)<1e-15)break;const nr=rate-npv/dnpv;if(Math.abs(nr-rate)<1e-10){rate=nr;break}rate=nr}
-        const irr=rate*100;irrVal=isFinite(irr)?irr:null;
-      }
-      full[yr-1]={year:yr,irr:irrVal};
+      full[yr-1]={year:yr,irr:solveIRR(buildIRRCashflows(r.rows.slice(0,yr),r.annual_premium,r.pmt_p))};
     }
     return full;
   });
@@ -813,26 +781,31 @@ function drawChart(){
 
 function irrTerminalValue(row){return row.irr_terminal_cv!=null?row.irr_terminal_cv:(row.total_cv||row.guaranteed_cv)}
 function npvAt(rate,cfs){let s=cfs[0];for(let j=1;j<cfs.length;j++)s+=cfs[j]/Math.pow(1+rate,j);return s}
+function buildIRRCashflows(rows,premium,pmtP){
+  const yrs=rows.length, cfs=new Array(yrs+1).fill(0);
+  if(pmtP>=1)cfs[0]-=premium;
+  for(let yr=1;yr<yrs;yr++){
+    if(yr+1<=pmtP)cfs[yr]-=premium;
+    cfs[yr]+=(rows[yr-1].survival_benefit||0);
+  }
+  cfs[yrs]+=(rows[yrs-1].survival_benefit||0);
+  cfs[yrs]+=irrTerminalValue(rows[yrs-1]);
+  return cfs;
+}
+function solveIRR(cfs){
+  let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);
+  if(flo*fhi>0) return null;
+  for(let it=0;it<60;it++){const mid=(lo+hi)/2,fm=npvAt(mid,cfs);if(Math.abs(fm)<1e-6){lo=hi=mid;break}if(flo*fm<0)hi=mid;else lo=mid;if(hi-lo<1e-10)break}
+  let rate=(lo+hi)/2;
+  for(let it=0;it<30;it++){let npv=0,dnpv=0;for(let j=0;j<cfs.length;j++){const dv=Math.pow(1+rate,j);npv+=cfs[j]/dv;if(j>0)dnpv+=-j*cfs[j]/Math.pow(1+rate,j+1)}if(Math.abs(dnpv)<1e-15)break;const nr=rate-npv/dnpv;if(Math.abs(nr-rate)<1e-10){rate=nr;break}rate=nr}
+  const irr=rate*100; return isFinite(irr)?irr:null;
+}
 function calcIRR(rows,premium,pmtP){
   const d=[];
   for(let i=0;i<rows.length;i++){
     const yrs=i+1; if(yrs<2){d.push({year:rows[i].year,irr:null});continue}
-    // 现金流：每年 = -保费 + 年金 + 红利；最后一年额外+退保CV
-    const cfs=[];
-    for(let y=0;y<yrs;y++){
-      const row=rows[y];
-      let cf=0;
-      if(y<pmtP) cf-=premium; // 交保费
-      cf+=(row.survival_benefit||0); // 领年金(含红利)
-      if(y===yrs-1) cf+=irrTerminalValue(row); // 最后一年退保
-      cfs.push(cf);
-    }
-    let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);
-    if(flo*fhi>0){d.push({year:rows[i].year,irr:null});continue}
-    for(let it=0;it<60;it++){const mid=(lo+hi)/2,fm=npvAt(mid,cfs);if(Math.abs(fm)<1e-6){lo=hi=mid;break}if(flo*fm<0)hi=mid;else lo=mid;if(hi-lo<1e-10)break}
-    let rate=(lo+hi)/2;
-    for(let it=0;it<30;it++){let npv=cfs[0],dnpv=0;for(let j=1;j<cfs.length;j++){const dv=Math.pow(1+rate,j);npv+=cfs[j]/dv;dnpv+=-j*cfs[j]/Math.pow(1+rate,j+1)}if(Math.abs(dnpv)<1e-15)break;const nr=rate-npv/dnpv;if(Math.abs(nr-rate)<1e-10){rate=nr;break}rate=nr}
-    const irr=rate*100;d.push({year:rows[i].year,irr:isFinite(irr)?irr:null});
+    const cfs=buildIRRCashflows(rows.slice(0,yrs),premium,pmtP);
+    d.push({year:rows[i].year,irr:solveIRR(cfs)});
   }
   return d;
 }

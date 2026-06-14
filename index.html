@@ -407,8 +407,8 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
     const pr=t<=pmtP?prem:0; cumPre+=pr;
     const f=L(t); const cvF=f[0],dbF=f[1],sbF=f[2],mbF=f[3],rvNP=f[4];
     const cvP=f[5]||0, rvP=f[6]||0, rvRaw=f[7]||0; // CV_PVFB, RV_PVFB, RV (仅养老年金)
-    const cvBase=Math.max(rvNP,cvF);
-    const gCV=Math.round(cvBase*saB/SU*10)/10;
+    const gCvFactor=hasPvfb?cvF:Math.max(rvNP,cvF);
+    const gCV=Math.round(gCvFactor*saB/SU*10)/10;
     const gDB=Math.max(Math.round(dbF*saB/SU*10)/10,cumPre,gCV);
     const sbRaw=sbF*saB/SU;
     const sb=sbF>0?Math.round(sbRaw/sbFactor*10)/10:0;
@@ -425,7 +425,8 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
       const bInc=prvRVP>0?yrDiv*SU/prvRVP:0;
       cumBns+=bInc;
     }else{
-      yrDiv=cvBase>0?Math.round(cvBase*saB/SU*(adRM-adRL)*DR*10)/10:0;
+      const bonusBase=Math.max(rvNP,cvF);
+      yrDiv=bonusBase>0?Math.round(bonusBase*saB/SU*(adRM-adRL)*DR*10)/10:0;
       cashDiv=yrDiv; // 快返模式:红利直接领取
     }
 

@@ -402,9 +402,10 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
       bDB=0;
     }
 
+    const survivalBenefit=hasPvfb?sb:sb+cashDiv;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:sb+cashDiv,maturity_benefit:mb,
-      annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:bDB});
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:survivalBenefit,maturity_benefit:mb,
+      annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:bDB,irr_terminal_cv:hasPvfb?gCV:null});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};
 }
@@ -647,7 +648,7 @@ function render(){
         const row=rows[y]; let cf=0;
         if(y<pp) cf-=prem;
         cf+=(row.survival_benefit||0);
-        if(y===rows.length-1) cf+=(row.total_cv||row.guaranteed_cv);
+        if(y===rows.length-1) cf+=irrTerminalValue(row);
         cfs.push(cf);
       }
       let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);
@@ -697,7 +698,7 @@ function render(){
         let cf=0;
         if(y<r.pmt_p) cf-=r.annual_premium;
         cf+=(row.survival_benefit||0);
-        if(y===rows.length-1) cf+=(row.total_cv||row.guaranteed_cv);
+        if(y===rows.length-1) cf+=irrTerminalValue(row);
         cfs.push(cf);
       }
       let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);
@@ -751,6 +752,7 @@ function drawChart(){
     scales:{y:{ticks:{callback:v=>fmt(v/10000)+'万'}}}}}));
 }
 
+function irrTerminalValue(row){return row.irr_terminal_cv!=null?row.irr_terminal_cv:(row.total_cv||row.guaranteed_cv)}
 function npvAt(rate,cfs){let s=cfs[0];for(let j=1;j<cfs.length;j++)s+=cfs[j]/Math.pow(1+rate,j);return s}
 function calcIRR(rows,premium,pmtP){
   const d=[];
@@ -763,7 +765,7 @@ function calcIRR(rows,premium,pmtP){
       let cf=0;
       if(y<pmtP) cf-=premium; // 交保费
       cf+=(row.survival_benefit||0); // 领年金(含红利)
-      if(y===yrs-1) cf+=(row.total_cv||row.guaranteed_cv); // 最后一年退保
+      if(y===yrs-1) cf+=irrTerminalValue(row); // 最后一年退保
       cfs.push(cf);
     }
     let lo=-0.999,hi=2.0,flo=npvAt(lo,cfs),fhi=npvAt(hi,cfs);

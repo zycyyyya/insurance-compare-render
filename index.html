@@ -108,9 +108,10 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
 </div>
 
 <script>
+const DATA_CACHE_VERSION='20260614-v2';
 let catalog=[], dataCache={}, charts=[], results=[], activeCat='all', irrAll=[], skipped=[];
 let _db=null;
-function openDB(){if(_db)return Promise.resolve(_db);return new Promise(r=>{const req=indexedDB.open('ins-cache',1);req.onupgradeneeded=e=>e.target.result.createObjectStore('data');req.onsuccess=e=>{_db=e.target.result;r(_db)};req.onerror=()=>r(null)})}
+function openDB(){if(_db)return Promise.resolve(_db);return new Promise(r=>{const req=indexedDB.open('ins-cache-'+DATA_CACHE_VERSION,1);req.onupgradeneeded=e=>e.target.result.createObjectStore('data');req.onsuccess=e=>{_db=e.target.result;r(_db)};req.onerror=()=>r(null)})}
 async function idbGet(k){const db=await openDB();if(!db)return null;return new Promise(r=>{const tx=db.transaction('data','readonly');const req=tx.objectStore('data').get(k);req.onsuccess=()=>r(req.result||null);req.onerror=()=>r(null)})}
 async function idbPut(k,v){const db=await openDB();if(!db)return;const tx=db.transaction('data','readwrite');tx.objectStore('data').put(v,k)}
 
@@ -206,7 +207,7 @@ function toggleProd(i,on){
 
 // ====== 数据加载（gzip优先，支持按需拆分） ======
 async function loadData(p, annage, plan){
-  const cacheKey = p.name + (annage ? `_${annage}${plan!=null?'_'+plan:''}` : '');
+  const cacheKey = DATA_CACHE_VERSION + ':' + p.name + (annage ? `_${annage}${plan!=null?'_'+plan:''}` : '');
   // 修复: 养老年金(如中邮)无plan时,cacheKey应与calcAll一致(不带末尾下划线)
   // 统一格式: name_annage 或 name_annage_plan
   if(dataCache[cacheKey]) return dataCache[cacheKey];

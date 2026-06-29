@@ -265,8 +265,8 @@ async function calcAll(){
   // 逐个计算（计算本身很快，瓶颈在数据加载和IRR）
   for(const t of todo){
     let cacheKey = DATA_CACHE_VERSION + ':' + t.p.name;
-    if(t.p.meta.calc_type==='qingluan_pension') cacheKey = `${t.p.name}_${ann}_${plan}`;
-    else if(t.p.meta.calc_type==='zhongyou_pension') cacheKey = `${t.p.name}_${ann}`;
+    if(t.p.meta.calc_type==='qingluan_pension') cacheKey = `${DATA_CACHE_VERSION}:${t.p.name}_${ann}_${plan}`;
+    else if(t.p.meta.calc_type==='zhongyou_pension') cacheKey = `${DATA_CACHE_VERSION}:${t.p.name}_${ann}`;
     const d=dataCache[cacheKey];
     if(!d){skipped.push({label:t.p.label,reason:'数据文件未加载成功'});continue}
     let r;

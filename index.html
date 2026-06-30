@@ -108,7 +108,7 @@ tbody td{padding:5px 4px;text-align:right;border-bottom:1px solid #f0f0f0}
 </div>
 
 <script>
-const DATA_CACHE_VERSION='20260614-v2';
+const DATA_CACHE_VERSION='20260630-v1';
 let catalog=[], dataCache={}, charts=[], results=[], activeCat='all', irrAll=[], skipped=[];
 let _db=null;
 function openDB(){if(_db)return Promise.resolve(_db);return new Promise(r=>{const req=indexedDB.open('ins-cache-'+DATA_CACHE_VERSION,1);req.onupgradeneeded=e=>e.target.result.createObjectStore('data');req.onsuccess=e=>{_db=e.target.result;r(_db)};req.onerror=()=>r(null)})}

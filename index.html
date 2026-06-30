@@ -276,7 +276,7 @@ async function calcAll(){
       else if(ct==='zhongyou') r=calcZHY(a,s,pt,pr,d);
       else if(ct==='zhongying') r=calcZHYG(a,s,pt,pr,d);
       // === 新增年金产品 ===
-      else if(ct==='ljgt_annuity') r=calcLJGT(a,s,pt,pr,d,t.p);
+      else if(ct==='ljgt_annuity') r=calcLJGT(a,s,pt,pr,d,ann,t.p);
       else if(ct==='changcheng_annuity') r=calcCC(a,s,pt,pr,d,t.p);
       else if(ct==='zhongyou_pension') r=calcZHYP(a,s,pt,pr,d,ann,t.p);
       else if(ct==='qingluan_pension') r=calcQL(a,s,pt,pr,d,ann,plan,t.p);
@@ -394,14 +394,17 @@ function calcZHYG(age,sex,NP,prem,d){
 // ====== 年金产品（新增） ======
 
 // --- 陆家嘴国泰年金（泰给利/泰享年年） ---
-function calcLJGT(age,sex,pmtP,prem,d,p){
+// annage: 领取年龄（仅养老年金有效，快返年金忽略）
+function calcLJGT(age,sex,pmtP,prem,d,annage,p){
   const SU=0.01,DR=p.meta.dividend_ratio||0.7,adRL=p.meta.ad_r_l||0.0175,adRM=p.meta.ad_r_m||0.039;
   const sbStart=p.meta.sb_start||0, sbFactor=p.meta.sb_annual_factor||1;
+  const category=p.meta.category||'';
+  const isPension=category.includes('养老'); // 养老年金 vs 快返年金
   const L=k=>d.factors[sex+'-'+pmtP+'-'+age+'-'+k]||[0,0,0,0,0,0,0];
   const saR=d.sa_ratio[sex+'-'+pmtP+'-'+age]||0, saB=Math.round(prem*saR/100*10)/10;
   if(!saB)return null;
   const maxYr=105-age; let rows=[],cumPre=0,cumBns=0;
-  // 检查是否有PVFB因子(len>=7 → 泰享年年养老年金模式)
+  // 因子>=7列 → 养老年金模式(PVFB)，<7列 → 快返模式(现金红利)
   const f1=L(1); const hasPvfb=f1.length>=7;
 
   for(let t=1;t<=maxYr;t++){
@@ -445,8 +448,10 @@ function calcLJGT(age,sex,pmtP,prem,d,p){
     }
 
     const survivalBenefit=hasPvfb?sb:sb+cashDiv;
+    // 养老年金：生存金从领取年龄开始发放，领龄前为0
+    const effectiveSB=isPension&&annage?(age+t>=annage?survivalBenefit:0):survivalBenefit;
     rows.push({year:t,age:age+t,premium:pr,cum_premium:Math.round(cumPre),sa_basic:saB,
-      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:survivalBenefit,maturity_benefit:mb,
+      guaranteed_cv:gCV,guaranteed_db:gDB,survival_benefit:effectiveSB,maturity_benefit:mb,
       annual_dividend:yrDiv,raw_bonus_cv:bCV,raw_bonus_db:bDB});
   }
   return {sa_basic:saB,rows,annual_premium:prem,pmt_p:pmtP,entry_age:age};

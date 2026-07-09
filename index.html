@@ -259,37 +259,30 @@ function calcBA(age, sex, pmtP, prem, d, rate, p) {
   const item = d.data && d.data[key];
   if (!item || !item.cv) return null;
   const cvList = item.cv;
-  const rbList = item.rb || [];
-  const rbcvList = item.rbcv || [];
+  // V4: 优先用预计算的 bonus_cv / tb，兼容旧 rb/rbcv/tb
+  const bonusCVList = item.bonus_cv || [];
   const tbList = item.tb || [];
   const share = prem / 1000;
   const maxYr = Math.min(105 - age, cvList.length);
-  let rows = [], cumPre = 0, cumRb = 0;
+  let rows = [], cumPre = 0;
   for (let t = 1; t <= maxYr; t++) {
     const pr = t <= pmtP ? prem : 0; cumPre += pr;
     const idx = t - 1;
-    const cvUnit = cvList[idx] || 0;
-    const rbUnit = rbList[idx] || 0;
-    const rbcvUnit = rbcvList[idx] || 0;
-    const tbUnit = tbList[idx] || 0;
-    const gCV = cvUnit * share;
-    cumRb += rbUnit * share;  // 累积增额红利保额
-    // 累积红利保额对应CV: 累积 rb × rbcv 因子 / 1000
-    const bonusCV_demo = rbcvUnit > 0 ? (cumRb * rbcvUnit / 1000) : 0;
-    const terminalB = tbUnit * share;
-    // 演示中档 (rate=1) = bonusCV_demo + terminalB
-    // 实现率调整:
-    const bonusCV_adj = bonusCV_demo * rate;
-    const terminalB_adj = terminalB * rate;
+    const gCV = (cvList[idx] || 0) * share;
+    // V4: bonus_cv 已是 per 1000 premium 的中档演示值
+    const demoBonusCV = (bonusCVList[idx] || 0) * share;
+    const demoTerminalB = (tbList[idx] || 0) * share;
+    const bonusCV_adj = demoBonusCV * rate;
+    const terminalB_adj = demoTerminalB * rate;
     const totalCV = gCV + bonusCV_adj;
-    const gDB = Math.max(gCV * 1.2, cumPre * 1.6, gCV + cumRb);
+    const gDB = Math.max(gCV * 1.2, cumPre * 1.6);
     rows.push({
       year: t, age: age + t, premium: pr, cum_premium: Math.round(cumPre),
       guaranteed_cv: Math.round(gCV),
       guaranteed_db: Math.round(gDB),
-      raw_bonus_cv: Math.round(bonusCV_demo),
-      raw_bonus_db: Math.round(bonusCV_demo + terminalB),
-      terminal_bonus: Math.round(terminalB),
+      raw_bonus_cv: Math.round(demoBonusCV),
+      raw_bonus_db: Math.round(demoBonusCV + demoTerminalB),
+      terminal_bonus: Math.round(demoTerminalB),
       total_cv: Math.round(totalCV),
       total_db: Math.round(gDB + bonusCV_adj + terminalB_adj),
     });
